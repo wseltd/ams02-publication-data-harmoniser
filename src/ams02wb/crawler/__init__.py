@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+# Canonical URL for the AMS-02 publication index page.
+INDEX_URL = "https://ams02.space/publications"
+
 
 class CrawlerError(Exception):
     """Raised when a crawler HTTP request fails (4xx/5xx)."""

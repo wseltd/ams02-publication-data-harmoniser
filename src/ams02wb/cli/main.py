@@ -30,3 +30,11 @@ def cli(ctx: click.Context, verbose: bool) -> None:
     )
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
+
+
+# Register subcommands — imported here to avoid circular imports.
+from ams02wb.cli.index_publications import index_publications  # noqa: E402
+from ams02wb.cli.ingest_publication import ingest_publication  # noqa: E402
+
+cli.add_command(index_publications)
+cli.add_command(ingest_publication)
