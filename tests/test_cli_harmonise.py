@@ -205,7 +205,7 @@ def test_harmonise_species_filter_limits_output(tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, [
         "harmonise", "--input-dir", str(in_dir), "--output-dir", str(out_dir),
-        "--species", "PROTON,ELECTRON",
+        "--species", "PROTON", "--species", "ELECTRON",
     ])
 
     assert result.exit_code == 0, result.output

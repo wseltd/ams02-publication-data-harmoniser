@@ -40,18 +40,18 @@ def _load_measurements_from_file(path: Path) -> tuple[list[Measurement], dict]:
 )
 @click.option(
     "--output-dir",
-    default="./ams02wb-harmonised/",
+    default="./ams02wb-data/harmonised/",
     type=click.Path(),
     help="Directory to write harmonised output files into.",
 )
 @click.option(
     "--species",
-    default=None,
+    multiple=True,
     type=str,
-    help="Comma-separated list of species to include (e.g. 'PROTON,HELIUM'). "
+    help="Species to include (repeatable, e.g. --species PROTON --species HELIUM). "
     "If omitted, all species are included.",
 )
-def harmonise_datasets(input_dir: str, output_dir: str, species: str | None) -> None:
+def harmonise_datasets(input_dir: str, output_dir: str, species: tuple[str, ...]) -> None:
     """Run harmonisation pipeline on all ingested JSON datasets in INPUT_DIR.
 
     Applies species normalisation, axis harmonisation, uncertainty labelling,
@@ -70,10 +70,10 @@ def harmonise_datasets(input_dir: str, output_dir: str, species: str | None) -> 
         click.echo("Error: no JSON files found in input directory.", err=True)
         sys.exit(1)
 
-    # Parse species filter if provided
+    # Parse species filter if provided (multiple=True yields empty tuple when omitted)
     species_filter: set[str] | None = None
-    if species is not None:
-        species_filter = {s.strip().upper() for s in species.split(",") if s.strip()}
+    if species:
+        species_filter = {s.strip().upper() for s in species}
 
     out_path.mkdir(parents=True, exist_ok=True)
 
