@@ -46,7 +46,7 @@ class TestBuildDiagonalCovariance:
         assert cov.shape == (1, 1)
         assert np.isclose(cov[0, 0], 0.42 ** 2)
 
-    def test_diagonal_empty_input_raises(self):
+    def test_diagonal_empty_input_returns_empty(self):
         """Empty array produces a (0, 0) matrix."""
         stat_err = np.array([])
         cov = build_diagonal_covariance(stat_err)
@@ -58,15 +58,15 @@ class TestEdgeCases:
 
     def test_non_1d_input_raises(self):
         """2-D input is rejected with a clear error."""
-        with pytest.raises(ValueError, match="must be 1-D"):
+        with pytest.raises(ValueError, match="must be 1-D") as exc_info:
             build_diagonal_covariance(np.array([[1.0, 2.0], [3.0, 4.0]]))
+        assert "2-D" in str(exc_info.value)
 
-    def test_zero_errors_produce_zero_diagonal(self):
-        """Zero uncertainties yield a zero covariance matrix — no information, not an error."""
-        stat_err = np.array([0.0, 0.0, 0.0])
-        cov = build_diagonal_covariance(stat_err)
-        assert np.allclose(cov, 0.0)
-        assert cov.shape == (3, 3)
+    def test_zero_errors_raise_value_error(self):
+        """Zero stat_err is rejected — would produce a singular covariance matrix."""
+        with pytest.raises(ValueError, match="strictly positive") as exc_info:
+            build_diagonal_covariance(np.array([0.0, 0.0, 0.0]))
+        assert "non-positive" in str(exc_info.value)
 
     def test_large_values_no_overflow(self):
         """Large but representable errors don't overflow in float64."""
