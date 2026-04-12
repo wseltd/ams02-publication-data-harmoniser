@@ -90,19 +90,39 @@ def validate_energy_fields(record: Dict[str, Any]) -> List[ValidationFinding]:
 
 
 def validate_flux_fields(record: Dict[str, Any]) -> List[ValidationFinding]:
-    """Validate that flux is strictly positive.
+    """Validate flux field for presence, type, and physical bounds.
 
-    Zero flux is flagged because a measured bin with exactly zero flux
-    is almost certainly a placeholder or missing value, not a real
-    measurement.
+    Checks:
+    - 'flux' key is present and not None
+    - Present values are numeric
+    - Flux is strictly positive (zero is flagged because a measured bin
+      with exactly zero flux is almost certainly a placeholder, not a
+      real measurement)
     """
     findings: List[ValidationFinding] = []
 
-    flux = record.get("flux")
-    if flux is not None and flux <= FLUX_MIN:
+    if "flux" not in record or record["flux"] is None:
         findings.append(ValidationFinding(
             field="flux",
-            value=flux,
+            value=record.get("flux"),
+            reason="required field is missing or None",
+        ))
+        return findings
+
+    value = record["flux"]
+
+    if not isinstance(value, (int, float)):
+        findings.append(ValidationFinding(
+            field="flux",
+            value=value,
+            reason=f"expected numeric value, got {type(value).__name__}",
+        ))
+        return findings
+
+    if value <= FLUX_MIN:
+        findings.append(ValidationFinding(
+            field="flux",
+            value=value,
             reason="flux must be strictly positive",
         ))
 
