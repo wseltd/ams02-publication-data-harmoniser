@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from ams02wb.parsers.pdf_parser import _is_numeric_row, extract_first_numeric_table
+import pytest
+
+from ams02wb.parsers.pdf_parser import (
+    _build_column_mapping,
+    _is_numeric_row,
+    extract_first_numeric_table,
+    map_pdf_rows_to_measurements,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -121,3 +128,163 @@ class TestExtractFirstNumericTable:
         # Should return full table since row ["1.5", "0.42"] is numeric
         assert result is table
         assert len(result) == 3
+
+
+# ---------------------------------------------------------------------------
+# _build_column_mapping tests
+# ---------------------------------------------------------------------------
+
+class TestBuildColumnMapping:
+    """Tests for header-to-field mapping via regex patterns."""
+
+    def test_build_column_mapping_bracket_units(self) -> None:
+        """Bracket-style unit delimiters: 'R [GV]', 'Kinetic Energy [GeV/n]'."""
+        header = ["R [GV]", "Flux", "stat", "sys"]
+        mapping = _build_column_mapping(header)
+        assert mapping[0] == "energy"
+        assert mapping[1] == "value"
+        assert mapping[2] == "stat_error"
+        assert mapping[3] == "sys_error"
+
+    def test_build_column_mapping_parenthetical_units(self) -> None:
+        """Parenthetical unit delimiters: 'R (GV)', 'Ek (GeV/n)'."""
+        header = ["Ek (GeV/n)", "Flux", "stat error"]
+        mapping = _build_column_mapping(header)
+        assert mapping[0] == "energy"
+        assert mapping[1] == "value"
+        assert mapping[2] == "stat_error"
+
+    def test_build_column_mapping_unknown_header_ignored(self) -> None:
+        """Columns with unrecognised headers are not included in mapping."""
+        header = ["Bin #", "R [GV]", "Flux", "Notes"]
+        mapping = _build_column_mapping(header)
+        assert 0 not in mapping  # "Bin #" not mapped
+        assert 3 not in mapping  # "Notes" not mapped
+        assert mapping[1] == "energy"
+        assert mapping[2] == "value"
+
+    def test_rigidity_verbose_header(self) -> None:
+        """'Rigidity [GV]' (verbose form) maps to energy."""
+        mapping = _build_column_mapping(["Rigidity [GV]", "Flux"])
+        assert mapping[0] == "energy"
+
+    def test_kinetic_energy_underscore_variant(self) -> None:
+        """'E_k [GeV/n]' (underscore variant) maps to energy."""
+        mapping = _build_column_mapping(["E_k [GeV/n]", "Flux"])
+        assert mapping[0] == "energy"
+
+    def test_sys_error_verbose(self) -> None:
+        """'sys error' (verbose form) maps to sys_error."""
+        mapping = _build_column_mapping(["Flux", "sys error"])
+        assert mapping[1] == "sys_error"
+
+    def test_empty_header_returns_empty_mapping(self) -> None:
+        """Empty header row produces empty mapping."""
+        assert _build_column_mapping([]) == {}
+
+    def test_case_insensitive_matching(self) -> None:
+        """Header matching is case-insensitive."""
+        mapping = _build_column_mapping(["FLUX", "STAT", "SYS"])
+        assert mapping[0] == "value"
+        assert mapping[1] == "stat_error"
+        assert mapping[2] == "sys_error"
+
+
+# ---------------------------------------------------------------------------
+# map_pdf_rows_to_measurements tests
+# ---------------------------------------------------------------------------
+
+class TestMapPdfRowsToMeasurements:
+    """Tests for full row-to-measurement conversion."""
+
+    def test_map_rows_rigidity_header(self) -> None:
+        """Rigidity header produces energy_axis='rigidity', energy_unit='GV'."""
+        rows = [
+            ["R [GV]", "Flux"],
+            ["1.0", "0.5"],
+        ]
+        result = map_pdf_rows_to_measurements(rows)
+        assert len(result) == 1
+        assert result[0]["energy_axis"] == "rigidity"
+        assert result[0]["energy_unit"] == "GV"
+        assert result[0]["energy"] == 1.0
+        assert result[0]["value"] == 0.5
+
+    def test_map_rows_kinetic_energy_header(self) -> None:
+        """Kinetic energy header produces energy_axis='kinetic_energy'."""
+        rows = [
+            ["Ek (GeV/n)", "Flux"],
+            ["2.5", "0.3"],
+        ]
+        result = map_pdf_rows_to_measurements(rows)
+        assert len(result) == 1
+        assert result[0]["energy_axis"] == "kinetic_energy"
+        assert result[0]["energy_unit"] == "GeV/n"
+
+    def test_map_rows_missing_flux_column_raises(self) -> None:
+        """Table without a flux column raises ValueError."""
+        rows = [
+            ["R [GV]", "Notes"],
+            ["1.0", "some text"],
+        ]
+        with pytest.raises(ValueError, match="No flux column"):
+            map_pdf_rows_to_measurements(rows)
+
+    def test_map_rows_multiple_data_rows(self) -> None:
+        """Multiple data rows each produce one measurement dict."""
+        rows = [
+            ["R [GV]", "Flux"],
+            ["1.0", "0.5"],
+            ["2.0", "0.8"],
+            ["5.0", "1.2"],
+        ]
+        result = map_pdf_rows_to_measurements(rows)
+        assert len(result) == 3
+        assert result[0]["energy"] == 1.0
+        assert result[1]["energy"] == 2.0
+        assert result[2]["value"] == 1.2
+
+    def test_map_rows_stat_sys_error_columns(self) -> None:
+        """Statistical and systematic error columns are mapped correctly."""
+        rows = [
+            ["R [GV]", "Flux", "stat", "sys"],
+            ["1.0", "0.5", "0.01", "0.02"],
+        ]
+        result = map_pdf_rows_to_measurements(rows)
+        assert result[0]["stat_error"] == 0.01
+        assert result[0]["sys_error"] == 0.02
+
+    def test_map_rows_output_has_measurement_fields(self) -> None:
+        """Each output dict contains the expected canonical field names."""
+        rows = [
+            ["R [GV]", "Flux", "stat", "sys"],
+            ["1.0", "0.5", "0.01", "0.02"],
+        ]
+        result = map_pdf_rows_to_measurements(rows)
+        record = result[0]
+        assert "value" in record
+        assert "energy" in record
+        assert "energy_axis" in record
+        assert "energy_unit" in record
+        # Values are floats, not strings
+        assert isinstance(record["value"], float)
+        assert isinstance(record["energy"], float)
+
+    def test_map_rows_empty_input(self) -> None:
+        """Rows with only a header (no data) returns empty list."""
+        rows = [["R [GV]", "Flux"]]
+        assert map_pdf_rows_to_measurements(rows) == []
+
+    def test_map_rows_completely_empty(self) -> None:
+        """Empty rows list returns empty list."""
+        assert map_pdf_rows_to_measurements([]) == []
+
+    def test_map_rows_non_numeric_cell_in_data(self) -> None:
+        """Non-numeric cell in data row is stored as-is (not silently dropped)."""
+        rows = [
+            ["R [GV]", "Flux"],
+            ["N/A", "0.5"],
+        ]
+        result = map_pdf_rows_to_measurements(rows)
+        assert result[0]["energy"] == "N/A"
+        assert result[0]["value"] == 0.5
