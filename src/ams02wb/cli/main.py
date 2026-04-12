@@ -1,9 +1,21 @@
 """CLI entry point for the AMS-02 Publication Data Harmonizer."""
 
+from __future__ import annotations
+
+import json
 import logging
+import sys
+from pathlib import Path
+from typing import Literal, cast
 
 import click
+import pandas as pd
 from importlib.metadata import version, PackageNotFoundError
+
+from ams02wb.alignment.daily import align_daily_series
+from ams02wb.alignment.bartels import align_bartels_rotation
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_version() -> str:
@@ -32,6 +44,186 @@ def cli(ctx: click.Context, verbose: bool) -> None:
         click.echo(ctx.get_help())
 
 
+def _load_harmonised_dataframe(species: str) -> pd.DataFrame:
+    """Load harmonised dataset for a species from the default data directory.
+
+    Reads from ``./ams02wb-data/harmonised/`` and converts the JSON records
+    to a DataFrame.  Returns an empty DataFrame if the file does not exist
+    or contains no records.
+    """
+    data_dir = Path("./ams02wb-data/harmonised/")
+    # Convention: one JSON file per species, lowercase filename.
+    species_file = data_dir / f"{species.lower()}.json"
+
+    if not species_file.exists():
+        logger.warning("No harmonised data file for species %s at %s", species, species_file)
+        return pd.DataFrame()
+
+    raw = json.loads(species_file.read_text(encoding="utf-8"))
+    if not raw:
+        return pd.DataFrame()
+
+    return pd.DataFrame(raw)
+
+
+@click.command("align-time-series")
+@click.option(
+    "--species",
+    multiple=True,
+    required=True,
+    type=str,
+    help="Species to align (repeatable, e.g. --species proton --species helium).",
+)
+@click.option(
+    "--join",
+    "join_type",
+    type=click.Choice(["intersection", "union"], case_sensitive=False),
+    default="intersection",
+    help="Join strategy: intersection (inner) or union (outer). Default: intersection.",
+)
+@click.option(
+    "--cadence",
+    type=click.Choice(["daily", "bartels"], case_sensitive=False),
+    default="daily",
+    help="Time cadence for alignment. Default: daily.",
+)
+@click.option(
+    "--output",
+    required=True,
+    type=click.Path(),
+    help="Path to write the aligned output (parquet).",
+)
+def align_time_series(
+    species: tuple[str, ...],
+    join_type: str,
+    cadence: str,
+    output: str,
+) -> None:
+    """Align harmonised species time-series on a shared time grid.
+
+    Loads harmonised datasets for each --species, aligns them by the
+    chosen --cadence, and writes the result to --output.
+    """
+    # Set up stderr logging for join diagnostics.
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.INFO)
+    stderr_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    logger.addHandler(stderr_handler)
+    logger.setLevel(logging.INFO)
+
+    species_frames: dict[str, pd.DataFrame] = {}
+    for sp in species:
+        df = _load_harmonised_dataframe(sp)
+        if df.empty:
+            logger.warning("Skipping species %s: no data loaded.", sp)
+            continue
+        species_frames[sp] = df
+
+    if not species_frames:
+        click.echo("Error: no data loaded for any requested species.", err=True)
+        sys.exit(1)
+
+    out_path = Path(output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Map CLI join names to pandas join types.
+    join_map = {"intersection": "inner", "union": "outer"}
+    pandas_join = cast(Literal["inner", "outer"], join_map[join_type])
+
+    if cadence == "daily":
+        result = align_daily_series(species_frames, join=pandas_join)
+        aligned_df = result.aligned_df
+
+        # Log join diagnostics to stderr.
+        for sp, count in result.missing_counts.items():
+            if count > 0:
+                logger.info("Dropped/imputed %d dates for species %s", count, sp)
+        logger.info(
+            "Aligned %d rows, date range %s to %s (join=%s)",
+            len(aligned_df),
+            result.date_range[0],
+            result.date_range[1],
+            result.join_type,
+        )
+    else:
+        # Bartels cadence: concatenate all species then group by rotation.
+        all_frames = pd.concat(species_frames.values(), ignore_index=True)
+        rotation_groups = align_bartels_rotation(all_frames)
+
+        # Build a wide-form result: one row per rotation with counts per species.
+        rows = []
+        for rot_num, group_df in sorted(rotation_groups.items()):
+            row: dict[str, object] = {"bartels_rotation": rot_num, "n_measurements": len(group_df)}
+            rows.append(row)
+
+        aligned_df = pd.DataFrame(rows)
+        logger.info("Aligned into %d Bartels rotations", len(aligned_df))
+
+    aligned_df.to_parquet(out_path, index=False)
+    click.echo(f"Wrote aligned data to {out_path}")
+
+
+@click.command("export-dataset")
+@click.option(
+    "--dataset",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the dataset file to export.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    required=True,
+    type=click.Choice(["parquet", "csv", "json", "usine"], case_sensitive=False),
+    help="Output format: parquet, csv, json, or usine.",
+)
+@click.option(
+    "--output",
+    required=True,
+    type=click.Path(),
+    help="Path to write the exported file.",
+)
+def export_dataset(dataset: str, fmt: str, output: str) -> None:
+    """Export a dataset to the specified format.
+
+    Reads the dataset from --dataset and writes to --output in the
+    chosen --format.
+    """
+    dataset_path = Path(dataset)
+    out_path = Path(output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    raw = json.loads(dataset_path.read_text(encoding="utf-8"))
+
+    if fmt == "parquet":
+        from ams02wb.exports.parquet import export_parquet
+
+        df = pd.DataFrame(raw if isinstance(raw, list) else raw.get("measurements", []))
+        export_parquet({"data": df, "provenance": raw.get("provenance", {}), "covariance_label": "unknown"}, out_path)
+    elif fmt == "csv":
+        from ams02wb.exports.csv_export import export_csv
+        from ams02wb.schema.models import Measurement
+
+        measurements = [Measurement(**m) for m in (raw if isinstance(raw, list) else raw.get("measurements", []))]
+        export_csv(measurements, out_path)
+    elif fmt == "json":
+        from ams02wb.exports.json_export import export_json
+
+        export_json(raw, out_path)
+    elif fmt == "usine":
+        from ams02wb.exports.usine_export import export_usine
+        from ams02wb.schema.models import Measurement
+
+        measurements = [Measurement(**m) for m in (raw if isinstance(raw, list) else raw.get("measurements", []))]
+        usine_text = export_usine(measurements, species_num="UNKNOWN")
+        out_path.write_text(usine_text, encoding="utf-8")
+    else:
+        click.echo(f"Error: unknown format {fmt!r}. Supported: parquet, csv, json, usine.", err=True)
+        sys.exit(1)
+
+    click.echo(f"Exported dataset to {out_path} ({fmt})")
+
+
 # Register subcommands — imported here to avoid circular imports.
 from ams02wb.cli.index_publications import index_publications  # noqa: E402
 from ams02wb.cli.ingest_publication import ingest_publication  # noqa: E402
@@ -46,3 +238,5 @@ cli.add_command(ingest_all)
 cli.add_command(validate_datasets)
 cli.add_command(harmonise_datasets)
 cli.add_command(build_likelihood)
+cli.add_command(align_time_series)
+cli.add_command(export_dataset)
