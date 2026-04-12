@@ -11,6 +11,7 @@ license = {text = "MIT"}
 dependencies = [
     "beautifulsoup4>=4.12",
     "numpy>=1.24",
+    "pandas>=2.0",
     "pydantic>=2.0",
 ]
 
