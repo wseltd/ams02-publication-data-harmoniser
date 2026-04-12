@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 license = {text = "MIT"}
 dependencies = [
     "beautifulsoup4>=4.12",
+    "pydantic>=2.0",
 ]
 
 [tool.setuptools.packages.find]
