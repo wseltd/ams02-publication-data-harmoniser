@@ -247,3 +247,127 @@ def test_ingest_publication_missing_id_exits_nonzero(
     )
 
     assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# ingest-all tests
+# ---------------------------------------------------------------------------
+
+
+@patch("ams02wb.cli.ingest_all.requests.Session")
+@patch("ams02wb.cli.ingest_all.load_publication_index")
+@patch("ams02wb.cli.ingest_all.run_single_ingest")
+def test_ingest_all_iterates_full_index(
+    mock_run: MagicMock,
+    mock_load: MagicMock,
+    mock_session_cls: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """ingest-all must call run_single_ingest once per index entry."""
+    mock_load.return_value = _FAKE_ENTRIES
+    mock_run.return_value = {}
+
+    runner = CliRunner()
+    runner.invoke(cli, ["ingest-all", "--output-dir", str(tmp_path)])
+
+    assert mock_run.call_count == len(_FAKE_ENTRIES)
+    ingested_ids = [call.args[1].paper_id for call in mock_run.call_args_list]
+    assert ingested_ids == ["101", "202"]
+
+
+@patch("ams02wb.cli.ingest_all.requests.Session")
+@patch("ams02wb.cli.ingest_all.load_publication_index")
+@patch("ams02wb.cli.ingest_publication.fetch_publication_page")
+def test_ingest_all_writes_datasets_to_output_dir(
+    mock_fetch: MagicMock,
+    mock_load: MagicMock,
+    mock_session_cls: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """ingest-all must write one JSON file per publication to output-dir."""
+    mock_load.return_value = _FAKE_ENTRIES
+    mock_fetch.return_value = _FAKE_PAGE
+    mock_session_cls.return_value = _mock_session_for_ingest()
+
+    runner = CliRunner()
+    runner.invoke(cli, ["ingest-all", "--output-dir", str(tmp_path)])
+
+    written_files = sorted(p.name for p in tmp_path.glob("*.json"))
+    assert "101.json" in written_files
+    assert "202.json" in written_files
+
+    dataset = json.loads((tmp_path / "101.json").read_text())
+    assert dataset["publication_id"] == "101"
+
+
+@patch("ams02wb.cli.ingest_all.requests.Session")
+@patch("ams02wb.cli.ingest_all.load_publication_index")
+@patch("ams02wb.cli.ingest_all.run_single_ingest")
+def test_ingest_all_single_failure_does_not_abort_batch(
+    mock_run: MagicMock,
+    mock_load: MagicMock,
+    mock_session_cls: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """A failure for one publication must not prevent ingestion of the rest."""
+    mock_load.return_value = _FAKE_ENTRIES
+
+    # First call raises, second succeeds.
+    mock_run.side_effect = [
+        CrawlerError("HTTP 500", status_code=500),
+        {"publication_id": "202"},
+    ]
+
+    runner = CliRunner()
+    runner.invoke(cli, ["ingest-all", "--output-dir", str(tmp_path)])
+
+    # Both entries were attempted despite the first failure.
+    assert mock_run.call_count == 2
+
+
+@patch("ams02wb.cli.ingest_all.requests.Session")
+@patch("ams02wb.cli.ingest_all.load_publication_index")
+@patch("ams02wb.cli.ingest_all.run_single_ingest")
+def test_ingest_all_summary_lists_failed_publication_ids(
+    mock_run: MagicMock,
+    mock_load: MagicMock,
+    mock_session_cls: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """The failure summary must list the paper_id of each failed publication."""
+    mock_load.return_value = _FAKE_ENTRIES
+
+    mock_run.side_effect = [
+        CrawlerError("HTTP 500", status_code=500),
+        {"publication_id": "202"},
+    ]
+
+    runner = CliRunner()
+    invocation = runner.invoke(cli, ["ingest-all", "--output-dir", str(tmp_path)])
+
+    # The failed ID must appear in stderr output (mixed_stderr=False not set,
+    # so Click merges stderr into output by default in CliRunner).
+    assert "101" in invocation.output
+
+
+@patch("ams02wb.cli.ingest_all.requests.Session")
+@patch("ams02wb.cli.ingest_all.load_publication_index")
+@patch("ams02wb.cli.ingest_all.run_single_ingest")
+def test_ingest_all_exits_nonzero_when_any_failed(
+    mock_run: MagicMock,
+    mock_load: MagicMock,
+    mock_session_cls: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """ingest-all must exit non-zero when at least one publication failed."""
+    mock_load.return_value = _FAKE_ENTRIES
+
+    mock_run.side_effect = [
+        CrawlerError("HTTP 500", status_code=500),
+        {"publication_id": "202"},
+    ]
+
+    runner = CliRunner()
+    invocation = runner.invoke(cli, ["ingest-all", "--output-dir", str(tmp_path)])
+
+    assert invocation.exit_code != 0
