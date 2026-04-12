@@ -167,3 +167,100 @@ def detect_overlaps(measurements: list[Measurement]) -> list[OverlapWarning]:
                     )
                 )
     return warnings
+
+
+def parse_time_window(
+    start: str | int | float | None,
+    stop: str | int | float | None,
+) -> tuple[datetime | None, datetime | None]:
+    """Parse a start/stop pair into timezone-aware UTC datetimes.
+
+    Convenience wrapper around the internal parser for use by callers that
+    have raw time values rather than Measurement objects.
+
+    Args:
+        start: Start time value (ISO-8601 string, Bartels rotation, Unix ts, or None).
+        stop: Stop time value (same types as start).
+
+    Returns:
+        Tuple of (start_utc, stop_utc) as timezone-aware datetimes or None.
+    """
+    return _parse_to_utc(start), _parse_to_utc(stop)
+
+
+def to_bartels_rotation(dt: datetime) -> int:
+    """Convert a UTC datetime to a Bartels rotation number.
+
+    Uses the same epoch and period as bartels_to_utc so that round-tripping
+    is consistent: bartels_to_utc(to_bartels_rotation(dt)) returns the start
+    of the rotation that contains dt.
+
+    Args:
+        dt: Timezone-aware UTC datetime.
+
+    Returns:
+        Bartels rotation number (>= 1).
+
+    Raises:
+        ValueError: If dt is before the Bartels epoch.
+    """
+    delta = dt - BARTELS_EPOCH
+    if delta.total_seconds() < 0:
+        raise ValueError(
+            f"Date {dt.isoformat()} is before the Bartels epoch "
+            f"({BARTELS_EPOCH.isoformat()})"
+        )
+    return int(delta.total_seconds() / (BARTELS_PERIOD_DAYS * 86400)) + 1
+
+
+@dataclasses.dataclass(frozen=True)
+class GapWarning:
+    """Warning for gaps between consecutive measurement time windows.
+
+    Attributes:
+        index_a: Index of the earlier measurement in the input list.
+        index_b: Index of the later measurement in the input list.
+        gap_days: Number of days between end of A and start of B.
+    """
+
+    index_a: int
+    index_b: int
+    gap_days: float
+
+
+def detect_gaps(
+    measurements: list[Measurement],
+    threshold_days: float = 1.0,
+) -> list[GapWarning]:
+    """Detect gaps between consecutive time windows that exceed a threshold.
+
+    Measurements are sorted by time_start_utc before comparison. Only
+    measurements with both time_start_utc and time_end_utc are considered.
+
+    Args:
+        measurements: List of measurements with normalised time windows.
+        threshold_days: Minimum gap size in days to report (default 1.0).
+
+    Returns:
+        List of GapWarning for each consecutive pair with a gap exceeding
+        the threshold.
+    """
+    # Collect windows and sort by start time
+    windows: list[tuple[int, datetime, datetime]] = []
+    for i, meas in enumerate(measurements):
+        if meas.time_start_utc is not None and meas.time_end_utc is not None:
+            windows.append((i, meas.time_start_utc, meas.time_end_utc))
+
+    windows.sort(key=lambda w: w[1])
+
+    gaps: list[GapWarning] = []
+    for k in range(len(windows) - 1):
+        idx_a, _start_a, end_a = windows[k]
+        idx_b, start_b, _end_b = windows[k + 1]
+        gap_seconds = (start_b - end_a).total_seconds()
+        gap_days = gap_seconds / 86400.0
+        if gap_days > threshold_days:
+            gaps.append(
+                GapWarning(index_a=idx_a, index_b=idx_b, gap_days=gap_days)
+            )
+    return gaps
