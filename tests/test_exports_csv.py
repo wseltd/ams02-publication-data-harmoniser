@@ -124,6 +124,31 @@ def test_export_csv_handles_empty_measurement_list(tmp_path: Path) -> None:
     assert rows == []
 
 
+def test_export_csv_none_nested_fields_serialize_correctly(tmp_path: Path) -> None:
+    """When nested fields are None/default, JSON cells contain null values, not empty strings."""
+    m = _make_measurement()  # No error fields, no labels set
+    out = export_csv([m], tmp_path / "none.csv")
+    _, rows = _read_csv(out)
+
+    sys_comp = json.loads(rows[0]["sys_err_components"])
+    # All error sub-fields should be None (JSON null) when not set
+    assert sys_comp["stat_err_pos"] is None
+    assert sys_comp["stat_err_neg"] is None
+    assert sys_comp["sys_err_pos"] is None
+    assert sys_comp["sys_err_neg"] is None
+    assert sys_comp["stat_error_low"] is None
+    assert sys_comp["sys_error_high"] is None
+
+    prov = json.loads(rows[0]["provenance_json"])
+    assert prov["stat_err_label"] is None
+    assert prov["sys_err_label"] is None
+    assert prov["time_start_utc"] is None
+    assert prov["time_end_utc"] is None
+
+    meta = json.loads(rows[0]["metadata_json"])
+    assert meta == {}
+
+
 def test_export_csv_round_trip_nested_fields_recoverable(tmp_path: Path) -> None:
     """json.loads on sys_err_components and provenance_json yields dicts."""
     m = _make_measurement(
