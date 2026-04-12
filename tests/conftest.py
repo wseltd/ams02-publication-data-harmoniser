@@ -121,3 +121,30 @@ def no_table_pdf(tmp_path: Path) -> Path:
     out = tmp_path / "no_table.pdf"
     pdf.output(str(out))
     return out
+
+
+def make_fixture_record(**overrides: object) -> dict:
+    """Build a minimal valid harmonised record with canonical schema fields.
+
+    Returns a dict with all fields expected by the canonical schema.
+    Callers can override any field via keyword arguments.
+    """
+    record: dict[str, object] = {
+        "species_num": "PROTON",
+        "species_den": "",
+        "x_axis_type": "kinetic_energy_per_nucleon",
+        "x_axis_unit": "GeV",
+        "x_min": 1.0,
+        "x_max": 2.0,
+        "x_centre": 1.5,
+        "y_value": 150.0,
+        "y_unit": "m^-2 s^-1 sr^-1 GeV^-1",
+        "stat_err": 5.0,
+        "sys_err_total": 3.0,
+        "sys_err_components": "{}",
+        "time_start": "2015-05-19T00:00:00+00:00",
+        "time_stop": "2015-11-19T00:00:00+00:00",
+        "provenance_json": '{"harmonisation_metadata": {"source": "test"}}',
+    }
+    record.update(overrides)
+    return record
