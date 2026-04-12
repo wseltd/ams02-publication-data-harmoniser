@@ -2,7 +2,25 @@
 
 from __future__ import annotations
 
+import enum
+
 from pydantic import BaseModel
+
+
+class UncertaintyLabel(enum.Enum):
+    """How an uncertainty value was obtained.
+
+    PUBLISHED — taken directly from the source table.
+    DERIVED   — result of a transformation (symmetrisation, heuristic split).
+    ASSUMED   — filled from a default because the source did not provide it.
+    """
+
+    PUBLISHED = "published"
+    DERIVED = "derived"
+    ASSUMED = "assumed"
+
+    def __repr__(self) -> str:
+        return f"UncertaintyLabel.{self.name}"
 
 
 class Species(BaseModel):
@@ -32,10 +50,10 @@ class Measurement(BaseModel):
     rather than mutating existing ones.
     """
 
-    energy_low: float
-    energy_high: float
-    energy_mid: float
-    value: float
+    energy_low: float = 0.0
+    energy_high: float = 0.0
+    energy_mid: float = 0.0
+    value: float = 0.0
     unit: str = "GeV"
     axis_type: str = "kinetic_energy_per_nucleon"
     species: str = "PROTON"
@@ -43,6 +61,12 @@ class Measurement(BaseModel):
     stat_error_high: float | None = None
     sys_error_low: float | None = None
     sys_error_high: float | None = None
+    stat_err_pos: float | None = None
+    stat_err_neg: float | None = None
+    sys_err_pos: float | None = None
+    sys_err_neg: float | None = None
+    stat_err_label: UncertaintyLabel | None = None
+    sys_err_label: UncertaintyLabel | None = None
 
     def __repr__(self) -> str:
         return (
