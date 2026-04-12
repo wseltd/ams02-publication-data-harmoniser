@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import click
-import requests
+import requests  # type: ignore[import-untyped]
 
 from ams02wb.crawler import CrawlerError, INDEX_URL
 from ams02wb.crawler.attachment_resolver import resolve_attachments

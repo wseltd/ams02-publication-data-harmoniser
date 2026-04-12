@@ -9,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import click
-import requests
+import requests  # type: ignore[import-untyped]
 
 from ams02wb.crawler import CrawlerError, INDEX_URL
 from ams02wb.crawler.index_loader import load_publication_index
