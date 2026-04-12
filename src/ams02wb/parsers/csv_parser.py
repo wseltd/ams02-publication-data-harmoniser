@@ -3,15 +3,24 @@
 Reads CSV files exported from AMS-02 publication pages, detects the
 header row by keyword matching, maps columns to canonical field names,
 and returns structured Measurement records with provenance.
+
+Two public entry points:
+
+* ``parse_csv(source)`` — accepts any file-like object (e.g. io.StringIO),
+  returns ``list[dict]`` with canonical field names.  Used when the caller
+  already has text in memory.
+* ``parse_csv_table(file_path, …)`` — accepts a filesystem path, returns a
+  ``ParsedTable`` dataclass.  Used by the ingestion CLI.
 """
 
 from __future__ import annotations
 
 import csv
+import io
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import IO, List
 
 logger = logging.getLogger(__name__)
 
@@ -293,3 +302,93 @@ def parse_csv_table(
         header_row_index=header_index,
         provenance=provenance,
     )
+
+
+# ---------------------------------------------------------------------------
+# Canonical field names for the generic parse_csv interface
+# ---------------------------------------------------------------------------
+# Minimum columns that a valid CSV must provide.  Chose these three because
+# without bin edges and a value the row carries no usable measurement.
+REQUIRED_CSV_COLUMNS: frozenset[str] = frozenset({"x_min", "x_max", "y_value"})
+
+
+def _detect_csv_delimiter(sample: str) -> str:
+    """Pick comma or semicolon based on frequency in the first 2 000 chars.
+
+    Chose counting over csv.Sniffer because Sniffer can misfire on short
+    files with quoted fields.  The AMS-02 data never uses quoted fields so
+    a simple count is reliable here.
+    """
+    chunk = sample[:2000]
+    if chunk.count(";") > chunk.count(","):
+        return ";"
+    return ","
+
+
+def parse_csv(source: IO[str]) -> list[dict]:
+    """Parse a CSV from a file-like object into a list of dicts.
+
+    Parameters
+    ----------
+    source : file-like
+        Readable text stream (e.g. ``io.StringIO`` or an ``open()`` handle).
+
+    Returns
+    -------
+    list[dict]
+        One dict per data row.  Keys are the lowercased, stripped header
+        names.  Numeric-looking values are converted to ``float``.
+
+    Raises
+    ------
+    ValueError
+        If *source* is empty, all lines are comments, or required columns
+        (``x_min``, ``x_max``, ``y_value``) are absent from the header.
+    """
+    text = source.read()
+    if not text.strip():
+        raise ValueError("CSV source is empty")
+
+    delimiter = _detect_csv_delimiter(text)
+
+    # Split into lines, drop comments and blank lines to find header + data.
+    content_lines: list[str] = []
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if stripped and not stripped.startswith("#"):
+            content_lines.append(stripped)
+
+    if not content_lines:
+        raise ValueError("CSV source is empty after removing comments")
+
+    reader = csv.reader(content_lines, delimiter=delimiter)
+    all_rows = list(reader)
+
+    header = [cell.strip().lower() for cell in all_rows[0]]
+
+    # --- required-column validation ---
+    header_set = set(header)
+    missing = REQUIRED_CSV_COLUMNS - header_set
+    if len(missing) == 1:
+        raise ValueError(
+            f"CSV is missing required column: {next(iter(missing))}"
+        )
+    if len(missing) > 1:
+        raise ValueError(
+            f"CSV is missing required columns: {', '.join(sorted(missing))}"
+        )
+
+    records: list[dict] = []
+    for row in all_rows[1:]:
+        if not any(cell.strip() for cell in row):
+            continue
+        record: dict = {}
+        for i, col_name in enumerate(header):
+            raw = row[i].strip() if i < len(row) else ""
+            try:
+                record[col_name] = float(raw)
+            except ValueError:
+                record[col_name] = raw
+        records.append(record)
+
+    return records
