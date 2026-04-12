@@ -188,3 +188,40 @@ class TestRigidityKineticEnergy:
         assert math.isclose(ek, r, rel_tol=1e-3), (
             f"ultrarelativistic limit: Ek={ek} should be close to R={r}"
         )
+
+    def test_rigidity_to_ke_zero_rigidity_gives_zero_ke(self) -> None:
+        """At R=0, particle is at rest so Ek=0."""
+        result = rigidity_to_kinetic_energy(0.0, 1, PROTON_MASS_GEV)
+        assert result == 0.0, f"expected 0.0 at zero rigidity, got {result}"
+
+    def test_negative_rigidity_raises(self) -> None:
+        try:
+            rigidity_to_kinetic_energy(-1.0, 1, PROTON_MASS_GEV)
+        except ValueError as exc:
+            assert "non-negative" in str(exc).lower()
+        else:
+            raise AssertionError("expected ValueError for negative rigidity")
+
+    def test_zero_charge_raises(self) -> None:
+        try:
+            rigidity_to_kinetic_energy(1.0, 0, PROTON_MASS_GEV)
+        except ValueError as exc:
+            assert "positive" in str(exc).lower()
+        else:
+            raise AssertionError("expected ValueError for zero charge")
+
+    def test_negative_mass_raises(self) -> None:
+        try:
+            rigidity_to_kinetic_energy(1.0, 1, -0.5)
+        except ValueError as exc:
+            assert "positive" in str(exc).lower()
+        else:
+            raise AssertionError("expected ValueError for negative mass")
+
+    def test_negative_kinetic_energy_raises(self) -> None:
+        try:
+            kinetic_energy_to_rigidity(-1.0, 1, PROTON_MASS_GEV)
+        except ValueError as exc:
+            assert "non-negative" in str(exc).lower()
+        else:
+            raise AssertionError("expected ValueError for negative Ek")

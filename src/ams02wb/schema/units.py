@@ -139,6 +139,31 @@ def convert_flux(value: float, from_unit: str, to_unit: str) -> float:
 # relativistic effects are significant for all species.
 
 
+def _validate_physics_inputs(
+    rigidity_gv: float,
+    charge_z: int,
+    mass_gev: float,
+    mass_number_a: int,
+) -> None:
+    """Reject unphysical parameter values at the boundary."""
+    if rigidity_gv < 0:
+        raise ValueError(
+            f"Rigidity must be non-negative, got {rigidity_gv}"
+        )
+    if charge_z < 1:
+        raise ValueError(
+            f"Charge number must be positive, got {charge_z}"
+        )
+    if mass_gev <= 0:
+        raise ValueError(
+            f"Rest mass must be positive, got {mass_gev}"
+        )
+    if mass_number_a < 1:
+        raise ValueError(
+            f"Mass number must be positive, got {mass_number_a}"
+        )
+
+
 def rigidity_to_kinetic_energy(
     rigidity_gv: float,
     charge_z: int,
@@ -150,21 +175,28 @@ def rigidity_to_kinetic_energy(
     Parameters
     ----------
     rigidity_gv : float
-        Magnetic rigidity in GV (gigavolts).
+        Magnetic rigidity in GV (gigavolts). Must be non-negative.
     charge_z : int
         Particle charge number (e.g. 1 for proton, 2 for helium-4).
+        Must be positive.
     mass_gev : float
         Total particle rest mass in GeV/c² (e.g. 0.93827 for proton,
-        3.7274 for helium-4).
+        3.7274 for helium-4). Must be positive.
     mass_number_a : int, optional
         Mass number (nucleon count). Default 1 (proton). For helium-4
-        use 4 to get kinetic energy *per nucleon*.
+        use 4 to get kinetic energy *per nucleon*. Must be positive.
 
     Returns
     -------
     float
         Kinetic energy per nucleon in GeV.
+
+    Raises
+    ------
+    ValueError
+        If any physical parameter is out of valid range.
     """
+    _validate_physics_inputs(rigidity_gv, charge_z, mass_gev, mass_number_a)
     # total momentum p = Z * R (in GeV/c when R in GV)
     p = charge_z * rigidity_gv
     e_total = math.sqrt(p * p + mass_gev * mass_gev)
@@ -183,19 +215,29 @@ def kinetic_energy_to_rigidity(
     Parameters
     ----------
     ek_per_nucleon_gev : float
-        Kinetic energy per nucleon in GeV.
+        Kinetic energy per nucleon in GeV. Must be non-negative.
     charge_z : int
-        Particle charge number.
+        Particle charge number. Must be positive.
     mass_gev : float
-        Total particle rest mass in GeV/c².
+        Total particle rest mass in GeV/c². Must be positive.
     mass_number_a : int, optional
-        Mass number. Default 1.
+        Mass number. Default 1. Must be positive.
 
     Returns
     -------
     float
         Magnetic rigidity in GV.
+
+    Raises
+    ------
+    ValueError
+        If any physical parameter is out of valid range.
     """
+    if ek_per_nucleon_gev < 0:
+        raise ValueError(
+            f"Kinetic energy must be non-negative, got {ek_per_nucleon_gev}"
+        )
+    _validate_physics_inputs(0.0, charge_z, mass_gev, mass_number_a)
     e_kinetic = ek_per_nucleon_gev * mass_number_a
     e_total = e_kinetic + mass_gev
     p = math.sqrt(e_total * e_total - mass_gev * mass_gev)
