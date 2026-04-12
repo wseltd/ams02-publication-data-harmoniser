@@ -7,10 +7,19 @@ ValidationFinding named-tuples describing any problems found.
 
 from typing import Any, Dict, List, NamedTuple
 
-ValidationFinding = NamedTuple(
-    "ValidationFinding",
-    [("field", str), ("value", Any), ("reason", str)],
-)
+
+class ValidationFinding(NamedTuple):
+    """A single validation problem found in a record."""
+
+    field: str
+    value: Any
+    reason: str
+
+    def __repr__(self) -> str:
+        return (
+            f"ValidationFinding(field={self.field!r}, "
+            f"value={self.value!r}, reason={self.reason!r})"
+        )
 
 # Physical bounds for AMS-02 energy measurements (GeV).
 # Range covers the full AMS-02 rigidity/energy range across species.
