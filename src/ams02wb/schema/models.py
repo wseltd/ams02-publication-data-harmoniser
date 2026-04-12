@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -67,6 +68,10 @@ class Measurement(BaseModel):
     sys_err_neg: float | None = None
     stat_err_label: UncertaintyLabel | None = None
     sys_err_label: UncertaintyLabel | None = None
+    time_start: str | int | float | None = None
+    time_end: str | int | float | None = None
+    time_start_utc: datetime | None = None
+    time_end_utc: datetime | None = None
 
     def __repr__(self) -> str:
         return (
