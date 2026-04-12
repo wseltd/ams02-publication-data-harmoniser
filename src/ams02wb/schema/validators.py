@@ -30,31 +30,55 @@ _ALL_REQUIRED_FIELDS = (
 
 
 def validate_energy_fields(record: Dict[str, Any]) -> List[ValidationFinding]:
-    """Validate energy fields against physical bounds and consistency.
+    """Validate energy fields for presence, type, bounds, and ordering.
 
     Checks:
-    - energy_centre_gev within [ENERGY_MIN_GEV, ENERGY_MAX_GEV]
+    - Each REQUIRED_ENERGY_FIELDS key is present and not None
+    - Present values are numeric and within [ENERGY_MIN_GEV, ENERGY_MAX_GEV]
     - energy_low_gev < energy_high_gev (bin edges must not be inverted)
     """
     findings: List[ValidationFinding] = []
 
-    centre = record.get("energy_centre_gev")
-    if centre is not None:
-        if centre < ENERGY_MIN_GEV:
+    # Track which fields have usable numeric values for the ordering check.
+    numeric_values: Dict[str, float] = {}
+
+    for field_name in REQUIRED_ENERGY_FIELDS:
+        if field_name not in record or record[field_name] is None:
             findings.append(ValidationFinding(
-                field="energy_centre_gev",
-                value=centre,
+                field=field_name,
+                value=record.get(field_name),
+                reason="required field is missing or None",
+            ))
+            continue
+
+        value = record[field_name]
+
+        if not isinstance(value, (int, float)):
+            findings.append(ValidationFinding(
+                field=field_name,
+                value=value,
+                reason=f"expected numeric value, got {type(value).__name__}",
+            ))
+            continue
+
+        numeric_values[field_name] = value
+
+        if value < ENERGY_MIN_GEV:
+            findings.append(ValidationFinding(
+                field=field_name,
+                value=value,
                 reason=f"below minimum {ENERGY_MIN_GEV} GeV",
             ))
-        elif centre > ENERGY_MAX_GEV:
+        elif value > ENERGY_MAX_GEV:
             findings.append(ValidationFinding(
-                field="energy_centre_gev",
-                value=centre,
+                field=field_name,
+                value=value,
                 reason=f"above maximum {ENERGY_MAX_GEV} GeV",
             ))
 
-    low = record.get("energy_low_gev")
-    high = record.get("energy_high_gev")
+    # Check bin-edge ordering when both low and high are present and numeric.
+    low = numeric_values.get("energy_low_gev")
+    high = numeric_values.get("energy_high_gev")
     if low is not None and high is not None and low >= high:
         findings.append(ValidationFinding(
             field="energy_low_gev",
