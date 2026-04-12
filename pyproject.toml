@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "AMS-02 publication data harmonizer and likelihood workbench"
 requires-python = ">=3.10"
 license = {text = "MIT"}
+dependencies = [
+    "beautifulsoup4>=4.12",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
