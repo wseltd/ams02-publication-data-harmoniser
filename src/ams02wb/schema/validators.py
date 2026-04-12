@@ -130,15 +130,36 @@ def validate_flux_fields(record: Dict[str, Any]) -> List[ValidationFinding]:
 
 
 def validate_uncertainty_fields(record: Dict[str, Any]) -> List[ValidationFinding]:
-    """Validate that statistical uncertainties are non-negative.
+    """Validate statistical uncertainty fields for presence, type, and sign.
 
-    Negative uncertainty values indicate data corruption or parsing errors.
+    Checks:
+    - Each REQUIRED_UNCERTAINTY_FIELDS key is present and not None
+    - Present values are numeric
+    - Values are >= 0 (negative uncertainty indicates data corruption
+      or parsing errors)
     """
     findings: List[ValidationFinding] = []
 
     for field_name in REQUIRED_UNCERTAINTY_FIELDS:
-        value = record.get(field_name)
-        if value is not None and value < 0:
+        if field_name not in record or record[field_name] is None:
+            findings.append(ValidationFinding(
+                field=field_name,
+                value=record.get(field_name),
+                reason="required field is missing or None",
+            ))
+            continue
+
+        value = record[field_name]
+
+        if not isinstance(value, (int, float)):
+            findings.append(ValidationFinding(
+                field=field_name,
+                value=value,
+                reason=f"expected numeric value, got {type(value).__name__}",
+            ))
+            continue
+
+        if value < 0:
             findings.append(ValidationFinding(
                 field=field_name,
                 value=value,
