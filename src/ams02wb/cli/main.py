@@ -37,8 +37,10 @@ from ams02wb.cli.index_publications import index_publications  # noqa: E402
 from ams02wb.cli.ingest_publication import ingest_publication  # noqa: E402
 from ams02wb.cli.ingest_all import ingest_all  # noqa: E402
 from ams02wb.cli.validate import validate_datasets  # noqa: E402
+from ams02wb.cli.harmonise import harmonise_datasets  # noqa: E402
 
 cli.add_command(index_publications)
 cli.add_command(ingest_publication)
 cli.add_command(ingest_all)
 cli.add_command(validate_datasets)
+cli.add_command(harmonise_datasets)
