@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from ams02wb.parsers.pdf_parser import (
+    SCHEMA_FIELDS,
     _build_column_mapping,
     _is_numeric_row,
     extract_first_numeric_table,
+    extract_tables,
+    map_columns,
     map_pdf_rows_to_measurements,
 )
 
@@ -288,3 +293,107 @@ class TestMapPdfRowsToMeasurements:
         result = map_pdf_rows_to_measurements(rows)
         assert result[0]["energy"] == "N/A"
         assert result[0]["value"] == 0.5
+
+
+# ---------------------------------------------------------------------------
+# extract_tables — PDF file-level extraction (uses fixtures from conftest.py)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_tables_single_table(single_table_pdf: Path) -> None:
+    """A one-page PDF with one bordered table yields at least one table."""
+    tables = extract_tables(single_table_pdf)
+    assert len(tables) >= 1
+    # The table should contain the header row + 5 data rows.
+    all_rows = [row for table in tables for row in table]
+    assert len(all_rows) >= 6  # header + 5 data rows
+
+
+def test_extract_tables_multi_page_continuous(
+    multi_page_table_pdf: Path,
+) -> None:
+    """A table spanning 2 pages is extracted (tables from both pages present)."""
+    tables = extract_tables(multi_page_table_pdf)
+    # pdfplumber extracts per-page; we expect tables from both pages.
+    assert len(tables) >= 2
+    total_rows = sum(len(t) for t in tables)
+    # Header (1) + 9 data rows = 10 minimum rows across all tables.
+    assert total_rows >= 10
+
+
+def test_extract_tables_no_table_returns_empty(no_table_pdf: Path) -> None:
+    """A text-only PDF returns an empty list — no tables detected."""
+    tables = extract_tables(no_table_pdf)
+    assert tables == []
+
+
+def test_extract_tables_header_not_duplicated_across_pages(
+    multi_page_table_pdf: Path,
+) -> None:
+    """Header row appears only in the first page's table, not repeated."""
+    tables = extract_tables(multi_page_table_pdf)
+    assert len(tables) >= 2
+
+    # Count how many tables start with a row containing "x_min" (header).
+    header_tables = [
+        t for t in tables
+        if any("x_min" in cell for cell in t[0])
+    ]
+    assert len(header_tables) == 1, (
+        "Header row should appear in exactly one table (page 1 only)"
+    )
+
+
+def test_extract_tables_numeric_cells_preserved(
+    single_table_pdf: Path,
+) -> None:
+    """Numeric cell values survive PDF round-trip without corruption."""
+    tables = extract_tables(single_table_pdf)
+    assert len(tables) >= 1
+
+    # Flatten all rows, skip header, check that numeric values parse.
+    all_rows = [row for table in tables for row in table]
+    # Find data rows (not the header)
+    data_rows = [
+        row for row in all_rows
+        if not any("x_min" in cell for cell in row)
+    ]
+    assert len(data_rows) >= 5
+
+    # Every cell in data rows should be parseable as float.
+    for row in data_rows:
+        for cell in row:
+            stripped = cell.strip()
+            if stripped:
+                float(stripped)  # raises ValueError if corrupted
+
+
+# ---------------------------------------------------------------------------
+# map_columns — header-to-schema-field mapping
+# ---------------------------------------------------------------------------
+
+
+def test_map_columns_known_headers() -> None:
+    """All known schema headers map to their canonical field names."""
+    headers = ["x_min", "x_max", "y_value", "stat_err", "sys_err_total"]
+    result = map_columns(headers)
+    assert len(result) == 5
+    for h in headers:
+        assert result[h] == h
+
+
+def test_map_columns_unknown_header_raises() -> None:
+    """Entirely unrecognised headers raise ValueError."""
+    with pytest.raises(ValueError, match="No recognised schema fields"):
+        map_columns(["foo", "bar", "baz"])
+
+
+def test_map_columns_partial_match() -> None:
+    """Mix of known and unknown headers: only known ones appear in mapping."""
+    headers = ["x_min", "notes", "y_value", "comments"]
+    result = map_columns(headers)
+    assert "x_min" in result
+    assert "y_value" in result
+    assert "notes" not in result
+    assert "comments" not in result
+    assert len(result) == 2

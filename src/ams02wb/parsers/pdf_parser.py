@@ -15,6 +15,7 @@ require an unwieldy lookup table that breaks on each new variant.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any, NamedTuple
 
 # Pattern matching integers, floats, and scientific notation, optionally
@@ -87,6 +88,12 @@ _HEADER_PATTERNS: list[_HeaderPattern] = [
     _HeaderPattern(_STAT_ERR_RE, "stat_error"),
     _HeaderPattern(_SYS_ERR_RE, "sys_error"),
 ]
+
+# Canonical schema fields for AMS-02 measurement tables.
+# Defined once here; used by map_columns for validation.
+SCHEMA_FIELDS: frozenset[str] = frozenset({
+    "x_min", "x_max", "y_value", "stat_err", "sys_err_total",
+})
 
 # Energy axis metadata inferred from which energy pattern matched.
 _ENERGY_AXIS_INFO: dict[re.Pattern[str], dict[str, str]] = {
@@ -251,3 +258,82 @@ def map_pdf_rows_to_measurements(
         measurements.append(record)
 
     return measurements
+
+
+# ---------------------------------------------------------------------------
+# PDF file-level extraction
+# ---------------------------------------------------------------------------
+
+
+def extract_tables(pdf_path: Path | str) -> list[list[list[str]]]:
+    """Extract all tables from a PDF file using pdfplumber.
+
+    Reads every page and collects tables detected by pdfplumber's
+    line-based table finder.  Each table is a list of rows; each row
+    is a list of cell strings.  None cells (pdfplumber uses None for
+    empty cells) are normalised to empty strings.
+
+    Parameters
+    ----------
+    pdf_path : Path | str
+        Filesystem path to the PDF.
+
+    Returns
+    -------
+    list[list[list[str]]]
+        All extracted tables.  Empty list if no tables found.
+    """
+    import pdfplumber
+
+    tables: list[list[list[str]]] = []
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            page_tables = page.extract_tables()
+            for table in page_tables:
+                if table:
+                    cleaned = [
+                        [cell if cell is not None else "" for cell in row]
+                        for row in table
+                    ]
+                    tables.append(cleaned)
+    return tables
+
+
+def map_columns(headers: list[str]) -> dict[str, str]:
+    """Map PDF table headers to canonical schema field names.
+
+    Checks each header against ``SCHEMA_FIELDS``.  Only recognised
+    headers appear in the returned mapping.
+
+    Raises ValueError when *no* header matches any known field — a table
+    with entirely unrecognised columns cannot be processed.
+
+    Parameters
+    ----------
+    headers : list[str]
+        Column header strings from a PDF table row.
+
+    Returns
+    -------
+    dict[str, str]
+        Mapping from original header text to canonical field name.
+        Only includes recognised headers; unrecognised ones are omitted.
+
+    Raises
+    ------
+    ValueError
+        If none of the headers match a known schema field.
+    """
+    mapping: dict[str, str] = {}
+    for header in headers:
+        normalised = header.strip().lower()
+        if normalised in SCHEMA_FIELDS:
+            mapping[header] = normalised
+
+    if not mapping:
+        raise ValueError(
+            f"No recognised schema fields in headers: {headers}. "
+            f"Expected one or more of: {sorted(SCHEMA_FIELDS)}"
+        )
+
+    return mapping
