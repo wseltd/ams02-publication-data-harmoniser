@@ -23,8 +23,8 @@ def _make_measurement(**overrides: object) -> Measurement:
         "unit": "GV",
         "axis_type": "rigidity",
         "species": "H",
-        "stat_err_pos": 0.5,
-        "sys_err_pos": 0.3,
+        "stat_error_high": 0.5,
+        "sys_error_high": 0.3,
     }
     defaults.update(overrides)
     return Measurement.model_validate(defaults)
@@ -179,8 +179,8 @@ def test_export_usine_flux_data_output() -> None:
         energy_high=20.0,
         energy_mid=15.0,
         value=3.14,
-        stat_err_pos=0.1,
-        sys_err_pos=0.05,
+        stat_error_high=0.1,
+        sys_error_high=0.05,
     )
     output = export_usine([m], species_num="H", x_axis_type="rigidity")
 
@@ -204,8 +204,10 @@ def test_export_usine_flux_data_output() -> None:
 def test_export_usine_rejects_unknown_axis_type() -> None:
     """Unknown axis type must raise ValueError with a helpful message."""
     m = _make_measurement()
-    with pytest.raises(ValueError, match="Unknown x_axis_type 'banana'"):
+    with pytest.raises(ValueError, match="Unknown x_axis_type 'banana'") as exc_info:
         export_usine([m], species_num="H", x_axis_type="banana")
+
+    assert "expected one of" in str(exc_info.value)
 
 
 # --- Mapping dict completeness ----------------------------------------

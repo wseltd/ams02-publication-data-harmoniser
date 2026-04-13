@@ -8,17 +8,23 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Literal, TypedDict
+from typing import Any, List, Literal, TypedDict
 
 from ams02wb.schema.validators import ValidationFinding, validate_record
 
 
-class FileResult(TypedDict):
+class FileResult(TypedDict):  # noqa: F401, E501 — TypedDict; bracket access in validate_dataset_dir prevents dataclass conversion
     """Validation result for a single dataset file."""
 
     file_path: str
     status: Literal["PASS", "FAIL"]
     findings: List[ValidationFinding]
+
+    def __repr__(self) -> str:
+        return (
+            f"FileResult(file_path={self.get('file_path')!r}, "
+            f"status={self.get('status')!r})"
+        )
 
 
 def validate_dataset_file(path: Path) -> FileResult:

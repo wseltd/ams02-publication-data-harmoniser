@@ -64,10 +64,10 @@ def test_export_csv_serialises_sys_err_components_as_json_string(
 ) -> None:
     """sys_err_components column must be a valid JSON string with error fields."""
     m = _make_measurement(
-        sys_err_pos=0.05,
-        sys_err_neg=-0.03,
-        stat_err_pos=0.01,
-        stat_err_neg=-0.01,
+        sys_error_high=0.05,
+        sys_error_low=-0.03,
+        stat_error_high=0.01,
+        stat_error_low=-0.01,
     )
     out = export_csv([m], tmp_path / "out.csv")
     _, rows = _read_csv(out)
@@ -136,8 +136,6 @@ def test_export_csv_none_nested_fields_serialize_correctly(tmp_path: Path) -> No
     assert sys_comp["stat_err_neg"] is None
     assert sys_comp["sys_err_pos"] is None
     assert sys_comp["sys_err_neg"] is None
-    assert sys_comp["stat_error_low"] is None
-    assert sys_comp["sys_error_high"] is None
 
     prov = json.loads(rows[0]["provenance_json"])
     assert prov["stat_err_label"] is None
@@ -152,8 +150,8 @@ def test_export_csv_none_nested_fields_serialize_correctly(tmp_path: Path) -> No
 def test_export_csv_round_trip_nested_fields_recoverable(tmp_path: Path) -> None:
     """json.loads on sys_err_components and provenance_json yields dicts."""
     m = _make_measurement(
-        sys_err_pos=0.1,
-        stat_err_pos=0.02,
+        sys_error_high=0.1,
+        stat_error_high=0.02,
         stat_err_label=UncertaintyLabel.DERIVED,
     )
     out = export_csv([m], tmp_path / "rt.csv")

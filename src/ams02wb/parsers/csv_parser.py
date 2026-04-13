@@ -2,7 +2,7 @@
 
 Reads CSV files exported from AMS-02 publication pages, detects the
 header row by keyword matching, maps columns to canonical field names,
-and returns structured Measurement records with provenance.
+and returns structured CsvMeasurement records with provenance.
 
 Two public entry points:
 
@@ -16,7 +16,6 @@ Two public entry points:
 from __future__ import annotations
 
 import csv
-import io
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,7 +33,7 @@ KNOWN_COLUMN_KEYWORDS: frozenset[str] = frozenset({
     "kinetic", "momentum", "ratio", "bin",
 })
 
-# Maps raw AMS CSV header strings (lowercased) to canonical Measurement
+# Maps raw AMS CSV header strings (lowercased) to canonical CsvMeasurement
 # field names.  At least 3 variants per canonical field where AMS papers
 # are known to differ.
 # Chose a flat dict over regex: the alias set is finite and exact lookup
@@ -104,7 +103,7 @@ class Provenance:
 
 
 @dataclass(frozen=True)
-class Measurement:
+class CsvMeasurement:
     """A single row of harmonised AMS-02 measurement data."""
 
     species: str
@@ -121,7 +120,7 @@ class Measurement:
 class ParsedTable:
     """Result of parsing a single CSV table."""
 
-    measurements: List[Measurement]
+    measurements: List[CsvMeasurement]
     source_columns: List[str]
     header_row_index: int
     provenance: Provenance
@@ -200,8 +199,8 @@ _NUMERIC_FIELDS = _MEASUREMENT_FIELDS - {"species"}
 def _parse_data_row(
     row: list[str],
     col_mapping: dict[int, str],
-) -> Measurement | None:
-    """Parse a single data row into a Measurement, or None on failure."""
+) -> CsvMeasurement | None:
+    """Parse a single data row into a CsvMeasurement, or None on failure."""
     values: dict[str, str] = {}
     for col_idx, field_name in col_mapping.items():
         if col_idx < len(row):
@@ -211,7 +210,7 @@ def _parse_data_row(
     if "value" not in values or not values["value"]:
         return None
 
-    converted: dict[str, object] = {}
+    converted: dict[str, float | str] = {}
     for fname in _MEASUREMENT_FIELDS:
         raw = values.get(fname, "")
         if fname == "species":
@@ -223,7 +222,7 @@ def _parse_data_row(
             logger.warning("Non-numeric value for %s: %r", fname, raw)
             return None
 
-    return Measurement(
+    return CsvMeasurement(
         species=str(converted["species"]),
         rigidity_gv_low=float(converted["rigidity_gv_low"]),
         rigidity_gv_high=float(converted["rigidity_gv_high"]),
@@ -247,8 +246,8 @@ def parse_csv_table(
 
     Scans the first 20 lines to detect a header row by matching cell
     contents against KNOWN_COLUMN_KEYWORDS.  Maps header strings to
-    canonical Measurement fields via COLUMN_MAP.  Data rows below the
-    header are converted to Measurement instances.
+    canonical CsvMeasurement fields via COLUMN_MAP.  Data rows below the
+    header are converted to CsvMeasurement instances.
 
     Parameters
     ----------
@@ -288,7 +287,7 @@ def parse_csv_table(
     col_mapping = _resolve_columns(header_cells)
     source_columns = [cell.strip() for cell in header_cells]
 
-    measurements: list[Measurement] = []
+    measurements: list[CsvMeasurement] = []
     for row in all_rows[header_index + 1:]:
         m = _parse_data_row(row, col_mapping)
         if m is not None:

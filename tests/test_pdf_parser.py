@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from ams02wb.parsers.pdf_parser import (
-    SCHEMA_FIELDS,
     _build_column_mapping,
     _is_numeric_row,
     extract_first_numeric_table,
@@ -107,7 +106,9 @@ class TestExtractFirstNumericTable:
 
     def test_extract_numeric_table_returns_none_for_no_tables(self) -> None:
         """Empty input list returns None."""
-        assert extract_first_numeric_table([]) is None
+        result = extract_first_numeric_table([])
+        assert result is None
+        assert not isinstance(result, list)
 
     def test_extract_numeric_table_selects_first_numeric_table(self) -> None:
         """When multiple numeric tables exist, the first one is returned."""
@@ -118,13 +119,17 @@ class TestExtractFirstNumericTable:
 
     def test_extract_numeric_table_with_empty_pdf(self) -> None:
         """Tables list containing only empty tables returns None."""
-        assert extract_first_numeric_table([[], [], []]) is None
+        result = extract_first_numeric_table([[], [], []])
+        assert result is None
+        assert not isinstance(result, list)
 
     def test_extract_all_text_tables_returns_none(self) -> None:
         """Multiple tables with only text all get skipped."""
         t1 = [["header", "col"], ["a", "b"]]
         t2 = [["name", "type"], ["x", "y"]]
-        assert extract_first_numeric_table([t1, t2]) is None
+        result = extract_first_numeric_table([t1, t2])
+        assert result is None
+        assert not isinstance(result, list)
 
     def test_extract_preserves_full_table(self) -> None:
         """The entire table is returned, not just the numeric rows."""
@@ -232,8 +237,9 @@ class TestMapPdfRowsToMeasurements:
             ["R [GV]", "Notes"],
             ["1.0", "some text"],
         ]
-        with pytest.raises(ValueError, match="No flux column"):
+        with pytest.raises(ValueError, match="No flux column") as exc_info:
             map_pdf_rows_to_measurements(rows)
+        assert exc_info.type is ValueError
 
     def test_map_rows_multiple_data_rows(self) -> None:
         """Multiple data rows each produce one measurement dict."""
@@ -384,8 +390,9 @@ def test_map_columns_known_headers() -> None:
 
 def test_map_columns_unknown_header_raises() -> None:
     """Entirely unrecognised headers raise ValueError."""
-    with pytest.raises(ValueError, match="No recognised schema fields"):
+    with pytest.raises(ValueError, match="No recognised schema fields") as exc_info:
         map_columns(["foo", "bar", "baz"])
+    assert exc_info.type is ValueError
 
 
 def test_map_columns_partial_match() -> None:

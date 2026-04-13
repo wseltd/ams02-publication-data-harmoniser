@@ -9,7 +9,6 @@ from ams02wb.harmoniser.timewindow import (
     detect_overlaps,
     normalise_time_window,
     BARTELS_EPOCH,
-    OverlapWarning,
 )
 from ams02wb.schema.models import Measurement
 
@@ -125,10 +124,11 @@ def test_naive_datetime_treated_as_utc() -> None:
 
 def test_time_end_before_time_start_raises() -> None:
     """time_end before time_start raises ValueError."""
-    with pytest_raises(ValueError, match="time_end.*before.*time_start"):
+    with pytest_raises(ValueError, match="time_end.*before.*time_start") as exc_info:
         normalise_time_window(
             _make_measurement(time_start="2020-06-01", time_end="2020-01-01")
         )
+    assert "2020-01-01" in str(exc_info.value)
 
 
 # --- detect_overlaps ---

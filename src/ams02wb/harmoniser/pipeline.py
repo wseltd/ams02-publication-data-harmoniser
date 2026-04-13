@@ -70,14 +70,10 @@ def _measurement_to_canonical(
     # Merge original provenance with harmonisation metadata
     merged_provenance = {**provenance_json, "harmonisation_metadata": harmonisation_metadata}
 
-    # Symmetrise stat errors from pos/neg or low/high pairs
-    stat_err = _symmetrise(m.stat_err_pos, m.stat_err_neg)
-    if stat_err is None:
-        stat_err = _symmetrise(m.stat_error_low, m.stat_error_high)
+    # Symmetrise stat errors from low/high pairs
+    stat_err = _symmetrise(m.stat_error_low, m.stat_error_high)
 
-    sys_err_total = _symmetrise(m.sys_err_pos, m.sys_err_neg)
-    if sys_err_total is None:
-        sys_err_total = _symmetrise(m.sys_error_low, m.sys_error_high)
+    sys_err_total = _symmetrise(m.sys_error_low, m.sys_error_high)
 
     return {
         "species_num": species_num,

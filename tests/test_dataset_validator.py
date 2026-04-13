@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from ams02wb.schema.dataset_validator import (
-    FileResult,
     validate_dataset_dir,
     validate_dataset_file,
 )
@@ -76,12 +75,15 @@ class TestValidateDatasetFile:
 
     def test_non_list_json_raises_type_error(self, tmp_path: Path) -> None:
         fpath = _write_json(tmp_path / "obj.json", {"not": "a list"})
-        with pytest.raises(TypeError, match="Expected a JSON array"):
+        with pytest.raises(TypeError, match="Expected a JSON array") as exc_info:
             validate_dataset_file(fpath)
+        assert "dict" in str(exc_info.value)
 
     def test_missing_file_raises_file_not_found(self, tmp_path: Path) -> None:
-        with pytest.raises(FileNotFoundError):
-            validate_dataset_file(tmp_path / "nope.json")
+        missing = tmp_path / "nope.json"
+        with pytest.raises(FileNotFoundError) as exc_info:
+            validate_dataset_file(missing)
+        assert str(missing) in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
@@ -93,8 +95,10 @@ class TestValidateDatasetDir:
     """Tests for validate_dataset_dir."""
 
     def test_nonexistent_dir_raises(self, tmp_path: Path) -> None:
-        with pytest.raises(FileNotFoundError, match="does not exist"):
-            validate_dataset_dir(tmp_path / "missing")
+        missing_dir = tmp_path / "missing"
+        with pytest.raises(FileNotFoundError, match="does not exist") as exc_info:
+            validate_dataset_dir(missing_dir)
+        assert str(missing_dir) in str(exc_info.value)
 
     def test_empty_dir_returns_empty_list(self, tmp_path: Path) -> None:
         assert validate_dataset_dir(tmp_path) == []

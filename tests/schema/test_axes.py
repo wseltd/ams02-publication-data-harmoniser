@@ -60,12 +60,18 @@ class TestNormaliseErrors:
     """Verify that unknown labels raise informative errors."""
 
     def test_unknown_label_raises_value_error(self) -> None:
-        with pytest.raises(ValueError, match="Unknown axis label"):
+        with pytest.raises(ValueError, match="Unknown axis label") as exc_info:
             normalise_axis_label("totally bogus axis")
+        assert type(exc_info.value) is ValueError
+        assert "totally bogus axis" in str(exc_info.value)
+        assert "Known labels" in str(exc_info.value)
 
     def test_value_error_message_contains_normalised_label(self) -> None:
-        with pytest.raises(ValueError, match="totally bogus axis"):
+        with pytest.raises(ValueError, match="totally bogus axis") as exc_info:
             normalise_axis_label("  Totally  Bogus  Axis  ")
+        assert type(exc_info.value) is ValueError
+        assert "totally bogus axis" in str(exc_info.value)
+        assert "  " not in str(exc_info.value)
 
 
 # -------------------------------------------------------------------

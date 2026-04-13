@@ -7,6 +7,18 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+# ---------------------------------------------------------------------------
+# Domain constants
+# ---------------------------------------------------------------------------
+
+VALID_SPECIES: set[str] = {
+    "proton", "helium", "electron", "positron", "antiproton",
+    "carbon", "oxygen", "lithium", "beryllium", "boron",
+    "neon", "magnesium", "silicon",
+}
+
+VALID_UNCERTAINTY_SOURCES: set[str] = {"published", "derived", "assumed"}
+
 
 class UncertaintyLabel(enum.Enum):
     """How an uncertainty value was obtained.
@@ -58,18 +70,26 @@ class Measurement(BaseModel):
     unit: str = "GeV"
     axis_type: str = "kinetic_energy_per_nucleon"
     species: str = "PROTON"
+    # Uncertainty fields — populated by parsers when available, otherwise
+    # left as None.  The label fields are set by the uncertainty harmoniser
+    # (ams02wb.harmoniser.uncertainty) during the pipeline run.
     stat_error_low: float | None = None
     stat_error_high: float | None = None
     sys_error_low: float | None = None
     sys_error_high: float | None = None
-    stat_err_pos: float | None = None
-    stat_err_neg: float | None = None
-    sys_err_pos: float | None = None
-    sys_err_neg: float | None = None
     stat_err_label: UncertaintyLabel | None = None
     sys_err_label: UncertaintyLabel | None = None
+
+    # Raw time bounds as parsed from the source (string, MJD int, or
+    # fractional year).  May remain None for time-integrated datasets.
     time_start: str | int | float | None = None
     time_end: str | int | float | None = None
+
+    # UTC timestamps — populated by the time-window normaliser
+    # (ams02wb.harmoniser.timewindow.normalise_time_window).  Remain None
+    # when the source table provides no time binning or when the normaliser
+    # is not part of the active pipeline.  Exporters guard against None
+    # before serialising these fields.
     time_start_utc: datetime | None = None
     time_end_utc: datetime | None = None
 

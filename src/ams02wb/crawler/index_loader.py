@@ -50,10 +50,10 @@ def load_publication_index(
         List of PublicationEntry extracted from the page. Empty list if no
         entries are found (with a WARNING log).
     """
-    response = session.get(index_url)  # type: ignore[union-attr]
-    response.raise_for_status()  # type: ignore[union-attr]
+    response = session.get(index_url)  # type: ignore[attr-defined]
+    response.raise_for_status()  # type: ignore[attr-defined]
 
-    soup = BeautifulSoup(response.text, "html.parser")  # type: ignore[union-attr]
+    soup = BeautifulSoup(response.text, "html.parser")  # type: ignore[attr-defined]
 
     entries: List[PublicationEntry] = []
 

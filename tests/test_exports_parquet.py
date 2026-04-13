@@ -126,6 +126,16 @@ def test_metadata_keys_and_values_are_bytes(tmp_path: Path) -> None:
     assert isinstance(meta[b"provenance"], bytes)
     assert isinstance(meta[b"covariance_label"], bytes)
 
+    # Verify key completeness: exactly our two custom keys must be present.
+    # Filter out pyarrow-internal keys (b"pandas", b"ARROW:schema", etc.)
+    # whose presence varies by pyarrow version.
+    pyarrow_internal = {k for k in meta if k in (b"pandas",) or k.startswith(b"ARROW:")}
+    expected_custom = {b"provenance", b"covariance_label"}
+    actual_custom = set(meta) - pyarrow_internal
+    assert actual_custom == expected_custom, (
+        f"unexpected custom metadata keys: {actual_custom - expected_custom}"
+    )
+
     # Verify ALL keys in the metadata dict are bytes (including pandas schema
     # metadata that pyarrow adds automatically).
     for key, value in meta.items():

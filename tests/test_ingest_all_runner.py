@@ -8,9 +8,8 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from ams02wb.cli.ingest_all_runner import run_ingest_all, IngestSummary
+from ams02wb.cli.ingest_all_runner import run_ingest_all
 from ams02wb.crawler import CrawlerError
-from ams02wb.crawler.index_loader import PublicationEntry
 from ams02wb.crawler.page_fetcher import FetchedPage
 
 
@@ -109,9 +108,9 @@ def test_run_ingest_all_summary_completed_at_is_iso8601(
 
     data = json.loads((out_dir / "ingest-summary.json").read_text())
     # Will raise ValueError if not valid ISO format.
-    from datetime import datetime
+    from datetime import datetime, timezone
     parsed = datetime.fromisoformat(data["completed_at"])
-    assert parsed is not None
+    assert parsed.tzinfo == timezone.utc
 
 
 # ---------------------------------------------------------------------------
@@ -248,5 +247,6 @@ def test_missing_index_file_raises_file_not_found(tmp_path: Path) -> None:
     out_dir = tmp_path / "output"
     out_dir.mkdir()
 
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(FileNotFoundError, match="publication_index") as exc_info:
         run_ingest_all(tmp_path, out_dir)
+    assert "publication_index.json" in str(exc_info.value)

@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
-from ams02wb.alignment.diagnostics import JoinDiagnostics, compute_join_diagnostics
+from ams02wb.alignment.diagnostics import compute_join_diagnostics
 
 
 def _make_aligned_df(species_values: dict[str, list]) -> pd.DataFrame:

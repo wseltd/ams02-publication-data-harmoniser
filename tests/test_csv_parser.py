@@ -143,12 +143,18 @@ def test_parse_csv_empty_file_raises() -> None:
     """A completely empty source raises ValueError with 'empty' in the
     message — distinct from a missing-column error.
     """
-    with pytest.raises(ValueError, match="(?i)empty"):
+    with pytest.raises(ValueError, match="(?i)empty") as exc_info:
         parse_csv(_csv(""))
 
+    assert exc_info.type is ValueError
+    assert "empty" in str(exc_info.value).lower()
+
     # Also test whitespace-only content
-    with pytest.raises(ValueError, match="(?i)empty"):
+    with pytest.raises(ValueError, match="(?i)empty") as exc_info:
         parse_csv(_csv("   \n\n  \n"))
+
+    assert exc_info.type is ValueError
+    assert "empty" in str(exc_info.value).lower()
 
 
 def test_parse_csv_whitespace_trimmed() -> None:

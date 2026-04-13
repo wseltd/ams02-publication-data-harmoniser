@@ -11,6 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 
+import pytest
+
 from ams02wb.cli.provenance import (
     attach_provenance,
     build_provenance_json,
@@ -53,6 +55,24 @@ def test_build_provenance_json_preserves_values():
 def test_build_provenance_json_all_values_are_strings():
     """Return type contract: every value must be a string."""
     result = build_provenance_json(**_SAMPLE_ARGS)
+    assert len(result) == 9
+    for key, value in result.items():
+        assert isinstance(value, str), f"{key} is {type(value).__name__}, not str"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        pytest.param({"publication_id": "101"}, id="numeric-looking-publication-id"),
+        pytest.param({"table_id": "0"}, id="zero-string-table-id"),
+        pytest.param({"parse_version": "2"}, id="single-digit-version"),
+    ],
+)
+def test_build_provenance_json_string_contract_edge_cases(overrides):
+    """Values that look numeric must still come back as strings."""
+    args = {**_SAMPLE_ARGS, **overrides}
+    result = build_provenance_json(**args)
+    assert len(result) == 9
     for key, value in result.items():
         assert isinstance(value, str), f"{key} is {type(value).__name__}, not str"
 

@@ -23,6 +23,9 @@ class AMS02Encoder(json.JSONEncoder):
     raises TypeError for unhandled types.
     """
 
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}()"
+
     def default(self, obj: Any) -> Any:
         """Serialise numpy and datetime objects to JSON-compatible types."""
         if isinstance(obj, np.ndarray):

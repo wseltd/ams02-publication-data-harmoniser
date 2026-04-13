@@ -7,7 +7,6 @@ ams02wb.likelihood.grouped_systematic — the canonical grouped-sys builder.
 """
 
 import numpy as np
-import numpy.testing as npt
 import pytest
 
 from ams02wb.likelihood.grouped_systematic import build_grouped_systematic_covariance
@@ -54,7 +53,7 @@ class TestStandardConstruction:
         cov = build_grouped_systematic_covariance(stat, sys)
 
         expected = np.diag(stat ** 2) + np.outer(sys, sys)
-        npt.assert_array_almost_equal(cov, expected)
+        assert np.allclose(cov, expected)
 
     def test_multi_group_covariance_shape_nxn(self):
         """Covariance for n bins is always (n, n)."""
@@ -91,11 +90,7 @@ class TestMultiGroupBlockStructure:
         # Cross-group block: rows in A, cols in B — should be zero because
         # sys[i]*sys[j] = 0.3 * 0.0 = 0 for i in A, j in B
         cross_block = cov[:n_a, n_a:]
-        npt.assert_array_almost_equal(
-            cross_block,
-            np.zeros((n_a, n_b)),
-            err_msg="Cross-group block should be zero when group B has zero sys",
-        )
+        assert np.allclose(cross_block, np.zeros((n_a, n_b)))
 
     def test_multi_group_offdiag_within_group_nonzero(self):
         """Within-group off-diagonal elements are nonzero (correlated)."""
@@ -122,11 +117,11 @@ class TestMultiGroupBlockStructure:
         cov = build_grouped_systematic_covariance(stat, sys)
 
         # Off-diagonal (0,1) should be 0.2 * 0.3 = 0.06
-        npt.assert_almost_equal(cov[0, 1], 0.06, decimal=10)
+        assert np.isclose(cov[0, 1], 0.06)
         # Off-diagonal (1,2) should be 0.3 * 0.4 = 0.12
-        npt.assert_almost_equal(cov[1, 2], 0.12, decimal=10)
+        assert np.isclose(cov[1, 2], 0.12)
         # Off-diagonal (0,2) should be 0.2 * 0.4 = 0.08
-        npt.assert_almost_equal(cov[0, 2], 0.08, decimal=10)
+        assert np.isclose(cov[0, 2], 0.08)
 
 
 # ---------------------------------------------------------------------------
@@ -141,16 +136,20 @@ class TestMismatchedLengthValidation:
         stat = np.array([0.1, 0.2, 0.3])
         sys = np.array([0.5, 0.5])  # 2 != 3
 
-        with pytest.raises(ValueError, match="Length mismatch"):
+        with pytest.raises(ValueError, match="Length mismatch") as exc_info:
             build_grouped_systematic_covariance(stat, sys)
+        assert "3" in str(exc_info.value)
+        assert "2" in str(exc_info.value)
 
     def test_mismatched_component_and_data_lengths_raises(self):
         """sys_err longer than stat_err raises ValueError."""
         stat = np.array([0.1])
         sys = np.array([0.5, 0.5, 0.5])
 
-        with pytest.raises(ValueError, match="Length mismatch"):
+        with pytest.raises(ValueError, match="Length mismatch") as exc_info:
             build_grouped_systematic_covariance(stat, sys)
+        assert "1" in str(exc_info.value)
+        assert "3" in str(exc_info.value)
 
     def test_empty_group_raises_value_error(self):
         """Empty arrays should produce an empty (0,0) matrix — verify shape.
@@ -180,11 +179,7 @@ class TestSymmetryAndChi2:
 
         cov = build_grouped_systematic_covariance(stat, sys)
 
-        npt.assert_array_almost_equal(
-            cov,
-            cov.T,
-            err_msg="Covariance matrix must be symmetric",
-        )
+        assert np.array_equal(cov, cov.T)
 
     def test_chi2_non_negative_on_toy_data(self):
         """chi2 = r^T C^{-1} r >= 0 for any residual vector."""

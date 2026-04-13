@@ -44,7 +44,7 @@ def resolve_attachments(html: str, base_url: str) -> list[Attachment]:
     attachments: list[Attachment] = []
 
     for anchor in soup.find_all("a", href=True):
-        href: str = anchor["href"]
+        href: str = str(anchor["href"])
         absolute_url = urljoin(base_url, href)
 
         # Strip query string / fragment to get the true filename.

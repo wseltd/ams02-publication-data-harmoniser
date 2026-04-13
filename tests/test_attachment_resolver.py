@@ -1,6 +1,6 @@
 """Tests for ams02wb.crawler.attachment_resolver."""
 
-from ams02wb.crawler.attachment_resolver import Attachment, resolve_attachments
+from ams02wb.crawler.attachment_resolver import resolve_attachments
 
 BASE_URL = "https://ams02.space/publications/paper42/"
 

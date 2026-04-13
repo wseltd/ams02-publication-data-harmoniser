@@ -86,8 +86,8 @@ def _format_data_rows(
             m.energy_high,
             m.energy_mid,
             m.value,
-            m.stat_err_pos,
-            m.sys_err_pos,
+            m.stat_error_high,
+            m.sys_error_high,
         ]
         row = "".join(
             str(v if v is not None else 0.0).ljust(_COL_WIDTH) for v in vals

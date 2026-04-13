@@ -106,7 +106,7 @@ class TestLabelUncertainty:
 
     def test_label_uncertainty_published(self) -> None:
         """Both errors from table, no transformations → both PUBLISHED."""
-        m = Measurement(value=1.0, stat_err_pos=0.1, sys_err_pos=0.2)
+        m = Measurement(value=1.0, stat_error_high=0.1, sys_error_high=0.2)
         ctx = ParseContext(stat_err_from_table=True, sys_err_from_table=True)
         result = label_uncertainties(m, ctx)
         assert result.stat_err_label == UncertaintyLabel.PUBLISHED
@@ -118,7 +118,7 @@ class TestLabelUncertainty:
     def test_label_uncertainty_derived(self) -> None:
         """Heuristic split → both stat and sys labelled DERIVED,
         even if table flags are also set (derived takes precedence)."""
-        m = Measurement(value=1.0, stat_err_pos=0.05, sys_err_pos=0.05)
+        m = Measurement(value=1.0, stat_error_high=0.05, sys_error_high=0.05)
         ctx = ParseContext(
             stat_err_from_table=True,
             sys_err_from_table=True,

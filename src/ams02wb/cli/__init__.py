@@ -8,8 +8,15 @@ from ams02wb.cli.validate import validate_datasets
 from ams02wb.cli.harmonise import harmonise_datasets
 from ams02wb.cli.build_likelihood import build_likelihood
 
+
+def main() -> None:
+    """Entry point for the console_scripts target."""
+    cli()
+
+
 __all__ = [
     "cli",
+    "main",
     "index_publications",
     "ingest_publication",
     "ingest_all",

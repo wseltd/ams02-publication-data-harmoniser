@@ -22,6 +22,9 @@ class AxisName(enum.StrEnum):
     KINETIC_ENERGY_PER_NUC = "kinetic_energy_per_nuc"
     MOMENTUM = "momentum"
 
+    def __repr__(self) -> str:
+        return f"AxisName.{self.name}"
+
 
 # ---------------------------------------------------------------------------
 # Alias table

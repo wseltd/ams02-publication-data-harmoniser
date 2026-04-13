@@ -34,6 +34,27 @@ class DailyAlignedResult:
     date_range: tuple[datetime.date, datetime.date]
 
 
+def _align_single_species(
+    name: str,
+    species_frames: dict[str, pd.DataFrame],
+    join: Literal["inner", "outer"],
+) -> DailyAlignedResult:
+    """Return an aligned result for a single-species input (no merge needed)."""
+    df = species_frames[name].copy()
+    value_cols = [c for c in df.columns if c != "time_start"]
+    rename_map = {c: f"{c}_{name}" for c in value_cols}
+    df = df.rename(columns=rename_map)
+    missing_counts: dict[str, int] = {name: 0}
+    dates = df["time_start"]
+    date_range = (min(dates), max(dates))
+    return DailyAlignedResult(
+        aligned_df=df,
+        missing_counts=missing_counts,
+        join_type=join,
+        date_range=date_range,
+    )
+
+
 def align_daily_series(
     species_frames: dict[str, pd.DataFrame],
     *,
@@ -68,20 +89,7 @@ def align_daily_series(
 
     # Single-species fast path: no merge needed.
     if len(species_names) == 1:
-        name = species_names[0]
-        df = species_frames[name].copy()
-        value_cols = [c for c in df.columns if c != "time_start"]
-        rename_map = {c: f"{c}_{name}" for c in value_cols}
-        df = df.rename(columns=rename_map)
-        missing_counts = {name: 0}
-        dates = df["time_start"]
-        date_range = (min(dates), max(dates))
-        return DailyAlignedResult(
-            aligned_df=df,
-            missing_counts=missing_counts,
-            join_type=join,
-            date_range=date_range,
-        )
+        return _align_single_species(species_names[0], species_frames, join)
 
     # Multi-species: iterative merge on time_start.
     first_name = species_names[0]

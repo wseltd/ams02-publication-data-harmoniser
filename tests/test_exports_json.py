@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ams02wb.exports.json_export import AMS02Encoder, export_json
+from ams02wb.exports.json_export import export_json
 
 
 def test_export_json_writes_valid_json_file(tmp_path: Path) -> None:

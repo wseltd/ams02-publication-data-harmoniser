@@ -12,10 +12,10 @@ from ams02wb.schema.models import Measurement, UncertaintyLabel
 
 
 def _make_measurement(
-    stat_err_pos: float = 0.1,
-    stat_err_neg: float = 0.1,
-    sys_err_pos: float = 0.2,
-    sys_err_neg: float = 0.2,
+    stat_error_high: float = 0.1,
+    stat_error_low: float = 0.1,
+    sys_error_high: float = 0.2,
+    sys_error_low: float = 0.2,
 ) -> Measurement:
     """Helper: build a Measurement with the given uncertainty values."""
     return Measurement(
@@ -23,10 +23,10 @@ def _make_measurement(
         energy_high=2.0,
         energy_mid=1.5,
         value=10.0,
-        stat_err_pos=stat_err_pos,
-        stat_err_neg=stat_err_neg,
-        sys_err_pos=sys_err_pos,
-        sys_err_neg=sys_err_neg,
+        stat_error_high=stat_error_high,
+        stat_error_low=stat_error_low,
+        sys_error_high=sys_error_high,
+        sys_error_low=sys_error_low,
     )
 
 
@@ -60,8 +60,8 @@ def test_missing_err_labelled_assumed() -> None:
     """No flags set and no values → ASSUMED."""
     ctx = ParseContext()
     result = label_uncertainties(
-        _make_measurement(stat_err_pos=0.0, stat_err_neg=0.0,
-                          sys_err_pos=0.0, sys_err_neg=0.0),
+        _make_measurement(stat_error_high=0.0, stat_error_low=0.0,
+                          sys_error_high=0.0, sys_error_low=0.0),
         ctx,
     )
     assert result.stat_err_label == UncertaintyLabel.ASSUMED
@@ -99,15 +99,15 @@ def test_no_context_flags_all_assumed() -> None:
 def test_label_does_not_mutate_uncertainty_values() -> None:
     """Labelling must not change the uncertainty magnitudes."""
     original = _make_measurement(
-        stat_err_pos=0.5, stat_err_neg=0.3,
-        sys_err_pos=0.8, sys_err_neg=0.7,
+        stat_error_high=0.5, stat_error_low=0.3,
+        sys_error_high=0.8, sys_error_low=0.7,
     )
     ctx = ParseContext(stat_err_from_table=True, sys_err_symmetrised=True)
     result = label_uncertainties(original, ctx)
-    assert result.stat_err_pos == 0.5
-    assert result.stat_err_neg == 0.3
-    assert result.sys_err_pos == 0.8
-    assert result.sys_err_neg == 0.7
+    assert result.stat_error_high == 0.5
+    assert result.stat_error_low == 0.3
+    assert result.sys_error_high == 0.8
+    assert result.sys_error_low == 0.7
 
 
 def test_returns_new_measurement_instance() -> None:
@@ -130,8 +130,8 @@ def test_mixed_stat_published_sys_derived() -> None:
 def test_zero_uncertainty_still_labelled() -> None:
     """Even zero-valued uncertainties get a label — zero is a valid value."""
     m = _make_measurement(
-        stat_err_pos=0.0, stat_err_neg=0.0,
-        sys_err_pos=0.0, sys_err_neg=0.0,
+        stat_error_high=0.0, stat_error_low=0.0,
+        sys_error_high=0.0, sys_error_low=0.0,
     )
     ctx = ParseContext(stat_err_from_table=True, sys_err_from_table=True)
     result = label_uncertainties(m, ctx)

@@ -53,14 +53,10 @@ def _measurement_to_row(m: Measurement) -> dict[str, str]:
     Dict-valued fields are serialised as JSON strings.
     """
     sys_err_components: dict[str, float | None] = {
-        "stat_error_low": m.stat_error_low,
-        "stat_error_high": m.stat_error_high,
-        "sys_error_low": m.sys_error_low,
-        "sys_error_high": m.sys_error_high,
-        "stat_err_pos": m.stat_err_pos,
-        "stat_err_neg": m.stat_err_neg,
-        "sys_err_pos": m.sys_err_pos,
-        "sys_err_neg": m.sys_err_neg,
+        "stat_err_pos": m.stat_error_high,
+        "stat_err_neg": m.stat_error_low,
+        "sys_err_pos": m.sys_error_high,
+        "sys_err_neg": m.sys_error_low,
     }
 
     provenance: dict[str, str | None] = {
@@ -92,8 +88,8 @@ def _measurement_to_row(m: Measurement) -> dict[str, str]:
         "time_start": _opt(m.time_start),
         "time_stop": _opt(m.time_end),
         "time_label": "",
-        "stat_err": _opt(m.stat_err_pos),
-        "sys_err_total": _opt(m.sys_err_pos),
+        "stat_err": _opt(m.stat_error_high),
+        "sys_err_total": _opt(m.sys_error_high),
         "sys_err_components": json.dumps(sys_err_components),
         "scale_err": "",
         "upper_limit_flag": "",
