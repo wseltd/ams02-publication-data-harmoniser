@@ -87,6 +87,67 @@ def _load_harmonised_parquet(path: Path) -> pd.DataFrame:
     return df
 
 
+def _build_and_write_single(
+    df: pd.DataFrame,
+    mode: str,
+    corr_length: float | None,
+    output_path: Path,
+    mode_metadata: dict[str, tuple[str, str]],
+) -> None:
+    """Build covariance and write fit-ready parquet + JSON sidecar for one subset."""
+    y = df["y_value"].to_numpy(dtype=np.float64)
+    x = df["x_centre"].to_numpy(dtype=np.float64)
+    stat_err = df["stat_err"].to_numpy(dtype=np.float64)
+
+    sys_err: np.ndarray | None = None
+    if "sys_err_total" in df.columns and df["sys_err_total"].notna().any():
+        sys_err = df["sys_err_total"].fillna(0.0).to_numpy(dtype=np.float64)
+
+    covariance = _build_covariance(mode, stat_err, sys_err, x, corr_length)
+    uncertainty_label, mode_string = mode_metadata[mode]
+
+    provenance: dict = {}
+    if "provenance_json" in df.columns:
+        first_prov = df["provenance_json"].iloc[0]
+        if isinstance(first_prov, str):
+            try:
+                provenance = json.loads(first_prov)
+            except json.JSONDecodeError:
+                pass
+        elif isinstance(first_prov, dict):
+            provenance = first_prov
+
+    fit_dataset = build_fit_dataset(
+        y=y, x=x, covariance=covariance,
+        uncertainty_label=uncertainty_label, mode=mode_string,
+        provenance=provenance,
+        species=str(df["species_num"].iloc[0]) if "species_num" in df.columns else "",
+        x_axis_type=str(df["x_axis_type"].iloc[0]) if "x_axis_type" in df.columns else "",
+        y_unit=str(df["y_unit"].iloc[0]) if "y_unit" in df.columns else "",
+    )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    out_df = df.copy()
+    out_df["covariance_matrix"] = [covariance.tolist()] * len(out_df)
+    out_df.to_parquet(output_path, index=False)
+
+    sidecar = {
+        "uncertainty_label": uncertainty_label,
+        "mode": mode_string,
+        "n_points": fit_dataset["n_points"],
+        "species": fit_dataset["species"],
+        "x_axis_type": fit_dataset["x_axis_type"],
+        "y_unit": fit_dataset["y_unit"],
+        "provenance": provenance,
+    }
+    if corr_length is not None:
+        sidecar["corr_length"] = corr_length
+
+    output_path.with_suffix(".json").write_text(
+        json.dumps(sidecar, indent=2, default=str), encoding="utf-8",
+    )
+
+
 @click.command("build-likelihood")
 @click.option(
     "--dataset",
@@ -114,11 +175,29 @@ def _load_harmonised_parquet(path: Path) -> pd.DataFrame:
     help="Output path for the fit-ready Parquet file. "
     "A JSON sidecar (<name>.json) is written alongside.",
 )
+@click.option(
+    "--time-bin",
+    "time_bin",
+    type=str,
+    default=None,
+    help="Filter to a single date (YYYY-MM-DD) or range (YYYY-MM-DD:YYYY-MM-DD) "
+    "before building the covariance. Essential for time-series data.",
+)
+@click.option(
+    "--per-day",
+    "per_day",
+    is_flag=True,
+    default=False,
+    help="Build one fit-ready dataset per unique date. "
+    "--output is treated as a directory path.",
+)
 def build_likelihood(
     dataset: str,
     mode: str,
     corr_length: float | None,
     output: str,
+    time_bin: str | None,
+    per_day: bool,
 ) -> None:
     """Build a fit-ready likelihood dataset from harmonised data.
 
@@ -159,6 +238,56 @@ def build_likelihood(
     if len(df) == 0:
         click.echo("Error: dataset contains no rows.", err=True)
         sys.exit(1)
+
+    # Find date column for time filtering
+    _date_col = None
+    for candidate in ("time_start", "date_start", "date"):
+        if candidate in df.columns:
+            _date_col = candidate
+            break
+
+    # Apply --time-bin filter
+    if time_bin is not None and _date_col:
+        dates = pd.to_datetime(df[_date_col], utc=True)
+        if ":" in time_bin:
+            start_str, end_str = time_bin.split(":", 1)
+            start = pd.Timestamp(start_str, tz="UTC")
+            end = pd.Timestamp(end_str, tz="UTC") + pd.Timedelta(days=1)
+            df = df[(dates >= start) & (dates < end)]
+        else:
+            target = pd.Timestamp(time_bin, tz="UTC")
+            df = df[dates.dt.date == target.date()]
+
+        df = df.reset_index(drop=True)
+        if len(df) == 0:
+            click.echo(f"Error: no data matches --time-bin {time_bin!r}.", err=True)
+            sys.exit(1)
+        click.echo(f"Filtered to {len(df)} rows for time-bin {time_bin}")
+
+    # Handle --per-day: build one likelihood per unique date
+    if per_day:
+        if not _date_col:
+            click.echo("Error: --per-day requires a time column (time_start).", err=True)
+            sys.exit(1)
+
+        out_dir = Path(output)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        dates = pd.to_datetime(df[_date_col], utc=True)
+        unique_dates = sorted(dates.dt.date.unique())
+        click.echo(f"Building per-day likelihoods for {len(unique_dates)} dates...")
+
+        for day in unique_dates:
+            day_df = df[dates.dt.date == day]
+            day_str = day.isoformat()
+            day_output = out_dir / f"{day_str}.parquet"
+
+            _build_and_write_single(
+                day_df, mode, corr_length, day_output, _MODE_METADATA,
+            )
+
+        click.echo(f"Wrote {len(unique_dates)} per-day datasets to {out_dir}")
+        return
 
     # Extract arrays for covariance construction
     y = df["y_value"].to_numpy(dtype=np.float64)

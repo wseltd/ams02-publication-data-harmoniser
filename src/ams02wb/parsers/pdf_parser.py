@@ -296,7 +296,211 @@ def extract_tables(pdf_path: Path | str) -> list[list[list[str]]]:
                         for row in table
                     ]
                     tables.append(cleaned)
+
+    # Fallback: if pdfplumber found no gridline tables, try text extraction
+    # and convert the result to the same list-of-rows format.
+    if not tables:
+        text_rows = extract_tables_from_text(pdf_path)
+        if text_rows:
+            # Build a single table from all text-extracted rows
+            all_keys = list(text_rows[0].keys())
+            header = all_keys
+            data = [[str(row.get(k, "")) for k in all_keys] for row in text_rows]
+            tables.append([header] + data)
+
     return tables
+
+
+# ---------------------------------------------------------------------------
+# Text-based extraction fallback for AMS space-delimited PDFs
+# ---------------------------------------------------------------------------
+
+# AMS scientific notation: (1.082 0.001 ...)×10 −1  or  ×100
+_AMS_EXPONENT_RE = re.compile(
+    r"\(([^)]+)\)\s*[×x]\s*10\s*[−\-]?\s*(\d+)"
+)
+
+# Unicode minus (U+2212) → ASCII minus
+_UNICODE_MINUS = "\u2212"
+
+
+def _parse_ams_line(line: str) -> list[float] | None:
+    """Parse a line of AMS-format data, handling (...)×10^N notation.
+
+    Returns a flat list of floats, or None if the line is not data.
+    """
+    line = line.replace(_UNICODE_MINUS, "-")
+
+    # Check for (...)×10^N pattern
+    m = _AMS_EXPONENT_RE.search(line)
+    if m:
+        prefix = line[: m.start()].strip()
+        inner = m.group(1).strip()
+        exp_str = m.group(2)
+
+        # Determine sign: check if there's a minus before the exponent digit
+        exp_segment = line[m.start() : m.end()]
+        if "-" in exp_segment.split("10")[-1]:
+            exponent = -(int(exp_str))
+        else:
+            exponent = int(exp_str)
+
+        multiplier = 10.0**exponent
+
+        # Parse prefix (rigidity range like "31.1 - 33.5")
+        prefix_nums = []
+        if prefix:
+            for token in re.split(r"[\s\-]+", prefix):
+                token = token.strip()
+                if not token:
+                    continue
+                try:
+                    prefix_nums.append(float(token))
+                except ValueError:
+                    pass
+
+        # Parse inner values and apply multiplier
+        inner_nums = []
+        for token in inner.split():
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                inner_nums.append(float(token) * multiplier)
+            except ValueError:
+                pass
+
+        if inner_nums:
+            return prefix_nums + inner_nums
+
+    # Fallback: plain space-separated numbers
+    tokens = line.replace(_UNICODE_MINUS, "-").split()
+    nums = []
+    for t in tokens:
+        t = t.strip().rstrip(",;")
+        try:
+            nums.append(float(t))
+        except ValueError:
+            pass
+
+    if len(nums) >= 3:
+        return nums
+
+    return None
+
+
+def _detect_header_line(line: str) -> list[str] | None:
+    """Check if a line looks like an AMS table header.
+
+    Returns column names if detected, None otherwise.
+    """
+    line_lower = line.lower().replace(_UNICODE_MINUS, "-")
+
+    # Must contain "rigidity" or "energy" plus at least one error keyword
+    has_axis = any(kw in line_lower for kw in ("rigidity", "energy", "ek"))
+    has_err = any(kw in line_lower for kw in ("stat", "sys", "syst", "flux"))
+
+    if has_axis and has_err:
+        # Split on multiple spaces to get column names
+        parts = re.split(r"\s{2,}", line.strip())
+        if len(parts) >= 3:
+            return parts
+
+    return None
+
+
+def extract_tables_from_text(
+    pdf_path: Path | str,
+    max_pages: int | None = None,
+) -> list[dict[str, Any]]:
+    """Extract tables from PDF using text-line parsing.
+
+    Fallback for AMS PDFs where pdfplumber's table detection fails
+    because tables are space-delimited rather than gridline-based.
+
+    Parameters
+    ----------
+    pdf_path : Path | str
+        Filesystem path to the PDF.
+    max_pages : int | None
+        Maximum number of pages to process.  None means all pages.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        One dict per data row with keys:
+        'rigidity_min', 'rigidity_max', 'flux', and error columns
+        as detected from the header.
+    """
+    import pdfplumber
+
+    all_rows: list[dict[str, Any]] = []
+    column_names: list[str] = []
+
+    with pdfplumber.open(pdf_path) as pdf:
+        pages = pdf.pages[:max_pages] if max_pages else pdf.pages
+
+        for page in pages:
+            text = page.extract_text()
+            if not text:
+                continue
+
+            for line in text.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Try detecting header
+                header = _detect_header_line(line)
+                if header and not column_names:
+                    # Build canonical column names from header
+                    column_names = []
+                    for h in header:
+                        h_lower = h.strip().lower()
+                        if "rigidity" in h_lower or h_lower in ("r", "ek"):
+                            column_names.append("rigidity")
+                        elif "flux" in h_lower or h_lower == "φ" or "φ" in h_lower:
+                            column_names.append("flux")
+                        elif "stat" in h_lower:
+                            column_names.append("stat_err")
+                        elif "trig" in h_lower:
+                            column_names.append("trig_err")
+                        elif "acc" in h_lower:
+                            column_names.append("acc_err")
+                        elif "unf" in h_lower:
+                            column_names.append("unf_err")
+                        elif "scale" in h_lower:
+                            column_names.append("scale_err")
+                        elif "syst" in h_lower:
+                            column_names.append("sys_err_total")
+                        else:
+                            column_names.append(h.strip())
+                    continue
+
+                # Try parsing as data row
+                nums = _parse_ams_line(line)
+                if nums is None:
+                    continue
+
+                # Map numbers to columns
+                # For AMS tables: first 2 nums are rigidity range, rest are flux+errors
+                if len(nums) >= 3:
+                    row: dict[str, Any] = {
+                        "rigidity_min": nums[0],
+                        "rigidity_max": nums[1],
+                    }
+
+                    # Map remaining values to column names (skip rigidity)
+                    value_cols = [c for c in column_names if c != "rigidity"]
+                    for i, val in enumerate(nums[2:]):
+                        if i < len(value_cols):
+                            row[value_cols[i]] = val
+                        else:
+                            row[f"col_{i + 2}"] = val
+
+                    all_rows.append(row)
+
+    return all_rows
 
 
 def map_columns(headers: list[str]) -> dict[str, str]:
