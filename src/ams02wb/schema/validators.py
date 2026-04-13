@@ -29,9 +29,9 @@ ENERGY_MAX_GEV = 5000.0
 # Flux must be strictly positive for a real measurement.
 FLUX_MIN = 0.0
 
-REQUIRED_ENERGY_FIELDS = ["energy_centre_gev", "energy_low_gev", "energy_high_gev"]
-REQUIRED_FLUX_FIELDS = ["flux"]
-REQUIRED_UNCERTAINTY_FIELDS = ["flux_err_stat_lo", "flux_err_stat_hi"]
+REQUIRED_ENERGY_FIELDS = ["x_centre", "x_min", "x_max"]
+REQUIRED_FLUX_FIELDS = ["y_value"]
+REQUIRED_UNCERTAINTY_FIELDS = ["stat_err"]
 
 _ALL_REQUIRED_FIELDS = (
     REQUIRED_ENERGY_FIELDS + REQUIRED_FLUX_FIELDS + REQUIRED_UNCERTAINTY_FIELDS
@@ -44,7 +44,7 @@ def validate_energy_fields(record: Dict[str, Any]) -> List[ValidationFinding]:
     Checks:
     - Each REQUIRED_ENERGY_FIELDS key is present and not None
     - Present values are numeric and within [ENERGY_MIN_GEV, ENERGY_MAX_GEV]
-    - energy_low_gev < energy_high_gev (bin edges must not be inverted)
+    - x_min < x_max (bin edges must not be inverted)
     """
     findings: List[ValidationFinding] = []
 
@@ -86,13 +86,13 @@ def validate_energy_fields(record: Dict[str, Any]) -> List[ValidationFinding]:
             ))
 
     # Check bin-edge ordering when both low and high are present and numeric.
-    low = numeric_values.get("energy_low_gev")
-    high = numeric_values.get("energy_high_gev")
+    low = numeric_values.get("x_min")
+    high = numeric_values.get("x_max")
     if low is not None and high is not None and low >= high:
         findings.append(ValidationFinding(
-            field="energy_low_gev",
+            field="x_min",
             value=low,
-            reason=f"energy_low_gev ({low}) >= energy_high_gev ({high})",
+            reason=f"x_min ({low}) >= x_max ({high})",
         ))
 
     return findings
@@ -110,19 +110,19 @@ def validate_flux_fields(record: Dict[str, Any]) -> List[ValidationFinding]:
     """
     findings: List[ValidationFinding] = []
 
-    if "flux" not in record or record["flux"] is None:
+    if "y_value" not in record or record["y_value"] is None:
         findings.append(ValidationFinding(
-            field="flux",
-            value=record.get("flux"),
+            field="y_value",
+            value=record.get("y_value"),
             reason="required field is missing or None",
         ))
         return findings
 
-    value = record["flux"]
+    value = record["y_value"]
 
     if not isinstance(value, (int, float)):
         findings.append(ValidationFinding(
-            field="flux",
+            field="y_value",
             value=value,
             reason=f"expected numeric value, got {type(value).__name__}",
         ))
@@ -130,7 +130,7 @@ def validate_flux_fields(record: Dict[str, Any]) -> List[ValidationFinding]:
 
     if value <= FLUX_MIN:
         findings.append(ValidationFinding(
-            field="flux",
+            field="y_value",
             value=value,
             reason="flux must be strictly positive",
         ))

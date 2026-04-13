@@ -119,8 +119,8 @@ def align_daily_series(
         # Disjoint inner join: no dates overlap.
         date_range = (datetime.date.min, datetime.date.min)
     else:
-        dates = merged["time_start"]
-        date_range = (min(dates), max(dates))
+        dates = merged["time_start"].dropna()
+        date_range = (str(min(dates)), str(max(dates)))
 
     return DailyAlignedResult(
         aligned_df=merged,

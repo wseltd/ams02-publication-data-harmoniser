@@ -122,7 +122,7 @@ def test_daily_period_boundary_start():
     result = align_daily_series({"proton": proton, "helium": helium}, join="inner")
 
     assert boundary_date in set(result.aligned_df["time_start"])
-    assert result.date_range[0] == boundary_date
+    assert result.date_range[0] == str(boundary_date)
 
 
 def test_daily_period_boundary_end():
@@ -137,7 +137,7 @@ def test_daily_period_boundary_end():
     result = align_daily_series({"proton": proton, "helium": helium}, join="inner")
 
     assert end_date in set(result.aligned_df["time_start"])
-    assert result.date_range[1] == end_date
+    assert result.date_range[1] == str(end_date)
 
 
 def test_daily_records_dropped_dates():

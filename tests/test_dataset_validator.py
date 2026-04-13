@@ -18,21 +18,19 @@ from ams02wb.schema.dataset_validator import (
 # ---------------------------------------------------------------------------
 
 _VALID_RECORD = {
-    "energy_centre_gev": 10.0,
-    "energy_low_gev": 5.0,
-    "energy_high_gev": 15.0,
-    "flux": 1.23,
-    "flux_err_stat_lo": 0.01,
-    "flux_err_stat_hi": 0.02,
+    "x_centre": 10.0,
+    "x_min": 5.0,
+    "x_max": 15.0,
+    "y_value": 1.23,
+    "stat_err": 0.01,
 }
 
 _INVALID_RECORD = {
-    "energy_centre_gev": -1.0,
-    "energy_low_gev": 5.0,
-    "energy_high_gev": 15.0,
-    "flux": 1.23,
-    "flux_err_stat_lo": 0.01,
-    "flux_err_stat_hi": 0.02,
+    "x_centre": -1.0,
+    "x_min": 5.0,
+    "x_max": 15.0,
+    "y_value": 1.23,
+    "stat_err": 0.01,
 }
 
 

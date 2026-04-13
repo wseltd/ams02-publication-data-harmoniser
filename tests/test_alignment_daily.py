@@ -147,16 +147,16 @@ def test_date_range_tuple_matches_aligned_extent() -> None:
         {"p": _make_df(dates_a), "h": _make_df(dates_b)}, join="inner"
     )
     assert result_inner.date_range == (
-        datetime.date(2020, 1, 3),
-        datetime.date(2020, 1, 5),
+        "2020-01-03",
+        "2020-01-05",
     )
 
     result_outer = align_daily_series(
         {"p": _make_df(dates_a), "h": _make_df(dates_b)}, join="outer"
     )
     assert result_outer.date_range == (
-        datetime.date(2020, 1, 1),
-        datetime.date(2020, 1, 7),
+        "2020-01-01",
+        "2020-01-07",
     )
 
 

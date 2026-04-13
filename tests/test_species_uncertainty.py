@@ -75,15 +75,9 @@ class TestNormaliseSpeciesVariants:
         assert "Unknown species" in str(exc_info.value)
 
     def test_normalise_species_antiproton_variants(self) -> None:
-        # Antiproton is NOT in KNOWN_SPECIES or _ALIASES — every attempt
-        # must raise.  This documents that the current species table does
-        # not include antiproton, which is the correct behaviour until
-        # antiproton data is added to the harmoniser.
+        # Antiproton is now a recognised species in the harmoniser.
         for alias in ("pbar", "antiproton", "ANTIPROTON", "Antiproton"):
-            with pytest.raises(ValueError) as exc_info:
-                normalise_species(alias)
-            assert "Unknown species" in str(exc_info.value)
-            assert alias in str(exc_info.value)
+            assert normalise_species(alias) == "ANTIPROTON"
 
     def test_normalise_species_unknown_raises(self) -> None:
         """Completely unknown name must raise with actionable message."""
