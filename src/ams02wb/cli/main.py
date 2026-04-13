@@ -44,29 +44,50 @@ def cli(ctx: click.Context, verbose: bool) -> None:
         click.echo(ctx.get_help())
 
 
-def _load_harmonised_dataframe(species: str) -> pd.DataFrame:
-    """Load harmonised dataset for a species from the default data directory.
+def _load_harmonised_dataframe(species: str, input_dir: Path) -> pd.DataFrame:
+    """Load harmonised dataset for a species from all JSON files in input_dir.
 
-    Reads from ``./ams02wb-data/harmonised/`` and converts the JSON records
-    to a DataFrame.  Returns an empty DataFrame if the file does not exist
-    or contains no records.
+    Scans all ``*.json`` files in *input_dir*, loads records, and filters
+    to rows matching *species* (case-insensitive on ``species_num``).
+    Returns an empty DataFrame if no matching records are found.
     """
-    data_dir = Path("./ams02wb-data/harmonised/")
-    # Convention: one JSON file per species, lowercase filename.
-    species_file = data_dir / f"{species.lower()}.json"
-
-    if not species_file.exists():
-        logger.warning("No harmonised data file for species %s at %s", species, species_file)
+    if not input_dir.is_dir():
+        logger.warning("Harmonised data directory does not exist: %s", input_dir)
         return pd.DataFrame()
 
-    raw = json.loads(species_file.read_text(encoding="utf-8"))
-    if not raw:
+    all_records: list[dict] = []
+    for json_file in sorted(input_dir.glob("*.json")):
+        try:
+            raw = json.loads(json_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(raw, list):
+            all_records.extend(raw)
+        elif isinstance(raw, dict) and "measurements" in raw:
+            all_records.extend(raw["measurements"])
+
+    if not all_records:
+        logger.warning("No records found in %s", input_dir)
         return pd.DataFrame()
 
-    return pd.DataFrame(raw)
+    df = pd.DataFrame(all_records)
+    if "species_num" not in df.columns:
+        return pd.DataFrame()
+
+    filtered = df[df["species_num"].str.upper() == species.upper()]
+    if filtered.empty:
+        logger.warning("No records for species %s in %s", species, input_dir)
+
+    return filtered
 
 
 @click.command("align-time-series")
+@click.option(
+    "--input-dir",
+    default="./ams02wb-data/harmonised/",
+    type=click.Path(),
+    help="Directory containing harmonised JSON files.",
+)
 @click.option(
     "--species",
     multiple=True,
@@ -94,6 +115,7 @@ def _load_harmonised_dataframe(species: str) -> pd.DataFrame:
     help="Path to write the aligned output (parquet).",
 )
 def align_time_series(
+    input_dir: str,
     species: tuple[str, ...],
     join_type: str,
     cadence: str,
@@ -111,9 +133,10 @@ def align_time_series(
     logger.addHandler(stderr_handler)
     logger.setLevel(logging.INFO)
 
+    harmonised_dir = Path(input_dir)
     species_frames: dict[str, pd.DataFrame] = {}
     for sp in species:
-        df = _load_harmonised_dataframe(sp)
+        df = _load_harmonised_dataframe(sp, harmonised_dir)
         if df.empty:
             logger.warning("Skipping species %s: no data loaded.", sp)
             continue

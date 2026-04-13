@@ -59,7 +59,7 @@ def test_align_time_series_daily_intersection(
 
     with patch("ams02wb.cli.main._load_harmonised_dataframe") as mock_load, \
          patch("ams02wb.cli.main.align_daily_series", return_value=sample_daily_result) as mock_align:
-        mock_load.side_effect = lambda sp: pd.DataFrame({
+        mock_load.side_effect = lambda sp, input_dir=None: pd.DataFrame({
             "time_start": [pd.Timestamp("2020-01-01")],
             "y_value": [1.0],
         })
