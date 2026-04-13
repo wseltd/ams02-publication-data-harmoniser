@@ -69,7 +69,7 @@ def test_export_dataset_csv_dispatches(
     """--format csv delegates to export_csv with Measurement objects."""
     out_file = tmp_path / "out.csv"
 
-    with patch("ams02wb.exports.csv_export.export_csv") as mock_csv:
+    with patch("ams02wb.exports.csv_export.export_csv_from_dicts") as mock_csv:
         result = runner.invoke(cli, [
             "export-dataset",
             "--dataset", str(dataset_file),

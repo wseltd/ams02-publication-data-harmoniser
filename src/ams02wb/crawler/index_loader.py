@@ -21,19 +21,7 @@ class PublicationEntry:
     url: str
 
 
-# Extract numeric paper_id from URL paths like /papers/123/, /papers/123/report.html
-_PAPER_ID_PATTERN = re.compile(r"/(\d+)(?:/[^/]*)?$")
-
-
-def _extract_paper_id(url: str) -> str | None:
-    """Extract a numeric paper ID from the last path segment of a URL.
-
-    Returns None if no numeric ID is found.
-    """
-    match = _PAPER_ID_PATTERN.search(url)
-    if match:
-        return match.group(1)
-    return None
+_PUB_LINK_PATTERN = re.compile(r"/(?:publications|papers)/(\d+)")
 
 
 def load_publication_index(
@@ -43,11 +31,11 @@ def load_publication_index(
     """Fetch the publication index page and return a list of PublicationEntry.
 
     Args:
-        session: An HTTP session with a `get(url)` method (e.g. requests.Session).
+        session: An HTTP session with a ``get(url)`` method (e.g. requests.Session).
         index_url: URL of the AMS-02 publication index page.
 
     Returns:
-        List of PublicationEntry extracted from the page. Empty list if no
+        List of PublicationEntry extracted from the page.  Empty list if no
         entries are found (with a WARNING log).
     """
     response = session.get(index_url)  # type: ignore[attr-defined]
@@ -55,30 +43,75 @@ def load_publication_index(
 
     soup = BeautifulSoup(response.text, "html.parser")  # type: ignore[attr-defined]
 
+    # Resolve base URL for relative hrefs
+    base_url = index_url.rstrip("/").rsplit("/publications", 1)[0]
+
     entries: List[PublicationEntry] = []
+    seen_ids: set[str] = set()
 
-    for link in soup.find_all("a", href=True):
-        if not isinstance(link, Tag):
+    # Strategy 1: Parse structured AMS publication rows.
+    # Each row has a title div (class ams-publication-row-title) and a
+    # sibling <a> linking to /publications/XXXXXX.
+    for row in soup.find_all("div", class_="ams-publication-row"):
+        if not isinstance(row, Tag):
             continue
 
-        href = str(link["href"])
-        title_text = link.get_text(strip=True)
+        # Extract title from the dedicated title div
+        title_div = row.find("div", class_="ams-publication-row-title")
+        title = title_div.get_text(strip=True) if title_div else ""
 
-        if not title_text or not href:
-            continue
+        # Find the /publications/XXXXXX link
+        for link in row.find_all("a", href=True):
+            href = str(link["href"])
+            match = _PUB_LINK_PATTERN.search(href)
+            if match:
+                paper_id = match.group(1)
+                if paper_id in seen_ids:
+                    continue
+                seen_ids.add(paper_id)
 
-        paper_id = _extract_paper_id(href)
-        if paper_id is None:
-            logger.debug("Skipping link with no extractable paper_id: %s", href)
-            continue
+                # Build absolute URL
+                if href.startswith("/"):
+                    href = base_url + href
 
-        entries.append(
-            PublicationEntry(paper_id=paper_id, title=title_text, url=href)
-        )
+                entries.append(
+                    PublicationEntry(
+                        paper_id=paper_id,
+                        title=title or f"Publication {paper_id}",
+                        url=href,
+                    )
+                )
+                break  # one entry per row
+
+    # Strategy 2: Fallback — scan all <a> tags for /publications/XXXXXX
+    # links if strategy 1 found nothing (e.g. different page layout).
+    if not entries:
+        for link in soup.find_all("a", href=True):
+            if not isinstance(link, Tag):
+                continue
+            href = str(link["href"])
+            match = _PUB_LINK_PATTERN.search(href)
+            if not match:
+                continue
+
+            paper_id = match.group(1)
+            if paper_id in seen_ids:
+                continue
+            seen_ids.add(paper_id)
+
+            if href.startswith("/"):
+                href = base_url + href
+
+            link_text = link.get_text(strip=True)
+            entries.append(
+                PublicationEntry(
+                    paper_id=paper_id,
+                    title=link_text or f"Publication {paper_id}",
+                    url=href,
+                )
+            )
 
     if not entries:
-        logger.warning(
-            "No paper entries found on index page: %s", index_url
-        )
+        logger.warning("No paper entries found on index page: %s", index_url)
 
     return entries

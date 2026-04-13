@@ -198,14 +198,15 @@ def export_dataset(dataset: str, fmt: str, output: str) -> None:
     if fmt == "parquet":
         from ams02wb.exports.parquet import export_parquet
 
-        df = pd.DataFrame(raw if isinstance(raw, list) else raw.get("measurements", []))
-        export_parquet({"data": df, "provenance": raw.get("provenance", {}), "covariance_label": "unknown"}, out_path)
+        records = raw if isinstance(raw, list) else raw.get("measurements", [])
+        provenance = raw.get("provenance", {}) if isinstance(raw, dict) else {}
+        df = pd.DataFrame(records)
+        export_parquet({"data": df, "provenance": provenance, "covariance_label": "unknown"}, out_path)
     elif fmt == "csv":
-        from ams02wb.exports.csv_export import export_csv
-        from ams02wb.schema.models import Measurement
+        from ams02wb.exports.csv_export import CANONICAL_FIELDS, export_csv_from_dicts
 
-        measurements = [Measurement(**m) for m in (raw if isinstance(raw, list) else raw.get("measurements", []))]
-        export_csv(measurements, out_path)
+        records = raw if isinstance(raw, list) else raw.get("measurements", [])
+        export_csv_from_dicts(records, out_path, CANONICAL_FIELDS)
     elif fmt == "json":
         from ams02wb.exports.json_export import export_json
 
@@ -214,8 +215,17 @@ def export_dataset(dataset: str, fmt: str, output: str) -> None:
         from ams02wb.exports.usine_export import export_usine
         from ams02wb.schema.models import Measurement
 
-        measurements = [Measurement(**m) for m in (raw if isinstance(raw, list) else raw.get("measurements", []))]
-        usine_text = export_usine(measurements, species_num="UNKNOWN")
+        records = raw if isinstance(raw, list) else raw.get("measurements", [])
+        # Try to build Measurement objects; fall back to empty list
+        measurements = []
+        for rec in records:
+            try:
+                measurements.append(Measurement(**rec))
+            except (TypeError, ValueError, KeyError):
+                logger.debug("Skipping record that doesn't fit Measurement schema")
+                continue
+        species = measurements[0].species if measurements else "UNKNOWN"
+        usine_text = export_usine(measurements, species_num=species)
         out_path.write_text(usine_text, encoding="utf-8")
     else:
         click.echo(f"Error: unknown format {fmt!r}. Supported: parquet, csv, json, usine.", err=True)

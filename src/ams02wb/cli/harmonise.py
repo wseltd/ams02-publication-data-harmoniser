@@ -23,6 +23,11 @@ def _load_measurements_from_file(path: Path) -> tuple[list[Measurement], dict]:
     the 'measurements' array if present; otherwise returns an empty list.
     """
     raw = json.loads(path.read_text(encoding="utf-8"))
+
+    # Skip non-dataset files (e.g. publication_index.json which is a list)
+    if not isinstance(raw, dict):
+        return [], {}
+
     provenance = raw.get("provenance", {})
 
     measurement_dicts = raw.get("measurements", [])

@@ -98,6 +98,35 @@ def _measurement_to_row(m: Measurement) -> dict[str, str]:
     }
 
 
+def export_csv_from_dicts(
+    records: list[dict], path: Path, fieldnames: list[str] | None = None,
+) -> Path:
+    """Write a list of dicts (e.g. harmonised records) to CSV.
+
+    Uses CANONICAL_FIELDS as the column order by default. Missing keys
+    produce empty cells. Dict-valued fields are JSON-serialised.
+    """
+    resolved = Path(path).resolve()
+    cols = fieldnames or CANONICAL_FIELDS
+
+    with open(resolved, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
+        writer.writeheader()
+        for rec in records:
+            row: dict[str, str] = {}
+            for col in cols:
+                val = rec.get(col, "")
+                if isinstance(val, (dict, list)):
+                    row[col] = json.dumps(val)
+                elif val is None:
+                    row[col] = ""
+                else:
+                    row[col] = str(val)
+            writer.writerow(row)
+
+    return resolved
+
+
 def export_csv(measurements: list[Measurement], path: Path) -> Path:
     """Write measurements to a CSV file in canonical schema order.
 

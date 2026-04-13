@@ -179,7 +179,7 @@ def test_export_dataset_csv(runner: CliRunner, tmp_path: Path) -> None:
     dataset_file.write_text(json.dumps([]))
     out_file = tmp_path / "out.csv"
 
-    with patch("ams02wb.exports.csv_export.export_csv", return_value=out_file) as mock_csv:
+    with patch("ams02wb.exports.csv_export.export_csv_from_dicts", return_value=out_file) as mock_csv:
         result = runner.invoke(cli, [
             "export-dataset",
             "--dataset", str(dataset_file),
