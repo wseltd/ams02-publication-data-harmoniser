@@ -6,12 +6,12 @@ An open-source Python CLI tool that sits above the AMS-02 public data layer and 
 
 AMS-02 on the International Space Station has published 30+ peer-reviewed measurements of cosmic-ray fluxes — protons, helium, electrons, positrons, antiprotons, boron-to-carbon ratios, lithium isotopes, and more. These results are the most precise cosmic-ray data ever collected.
 
-But using them together is painful:
+But using them together is painful — for physics-motivated reasons, not because AMS is publishing sloppily:
 
 - **Heterogeneous table formats** — some papers publish CSV files, others embed data in 2,825-page PDF supplements
-- **Inconsistent axes** — proton flux is given vs rigidity (GV), isotope results use kinetic energy per nucleon (GeV/n), antiproton results use absolute rigidity
-- **Different time windows** — daily proton fluxes cover 2,824 days, helium covers 2,824 days with slightly different gaps, electrons span 3,300 days, positrons span 3,268 days
-- **Heterogeneous uncertainty reporting** — some papers give stat+sys totals, others decompose into trigger/acceptance/unfolding/scale components, time-series add "time-dependent systematic" categories
+- **Different axes per species** — proton flux is given vs rigidity (GV) because that is what a magnetic spectrometer actually measures for charged particles; isotope and nuclei results use kinetic energy per nucleon (GeV/n) because that is the natural variable for propagation modelling; antiproton results use absolute rigidity. Each choice is physics-motivated, but combining results across papers still requires converting between them.
+- **Different time windows per species** — detector requirements and data-quality cuts differ per particle, so the useful date range is not identical across species. Some papers also publish the date range that is available at the time of submission rather than waiting for a matched window. Proton covers 2,824 days (May 2011 – Oct 2019), helium 2,824 days with slightly different gaps, electrons 3,300 days, positrons 3,268 days.
+- **Uncertainty reporting limited by analysis choices** — some papers give stat+sys totals, others decompose into trigger/acceptance/unfolding/scale components, time-series add "time-dependent systematic" categories. The level of detail a paper can publish is constrained by how the analysis was run — bin-by-bin full breakdowns are not always feasible — so the tables expose whatever granularity was achievable for that result.
 - **No published covariance matrices** for most datasets — yet bin-to-bin correlations are decisive at AMS-02 precision levels, as shown in the [B/C cookbook paper](https://arxiv.org/abs/1904.08210) and [antiproton correlation studies](https://link.aps.org/doi/10.1103/PhysRevResearch.2.043017)
 
 Every researcher doing dark matter searches, solar modulation studies, or cosmic-ray propagation fits has to write one-off parsers, unit converters, and alignment scripts from scratch. This tool eliminates that repeated work.
