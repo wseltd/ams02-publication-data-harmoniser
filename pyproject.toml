@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ams02wb"
 version = "0.1.0"
-description = "AMS-02 publication data harmonizer and likelihood workbench"
+description = "AMS-02 publication data harmoniser and likelihood workbench"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 dependencies = [

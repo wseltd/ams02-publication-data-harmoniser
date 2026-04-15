@@ -36,8 +36,8 @@ AMS publication pages → Ingestion → Canonical schema → Time-series alignme
 
 ```bash
 # From source
-git clone <repo-url>
-cd ams02-publication-data-harmonizer
+git clone https://github.com/wseltd/ams02-publication-data-harmoniser.git
+cd ams02-publication-data-harmoniser
 pip install -e .
 
 # Verify
