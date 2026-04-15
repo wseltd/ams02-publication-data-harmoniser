@@ -1,4 +1,4 @@
-# AMS-02 Publication Data Harmonizer and Likelihood Workbench
+# AMS-02 Publication Data Harmoniser and Likelihood Workbench
 
 An open-source Python CLI tool that sits above the AMS-02 public data layer and solves the missing problems researchers face when combining results across multiple AMS-02 publications.
 
